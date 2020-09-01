@@ -1,0 +1,7 @@
+{
+    "ClientID": "",
+    "ClientSecret": "",
+    "OAuthToken": "",
+    "MaxConcurrentDownloads": 4,
+    "OutputPath": "./logs_out/"
+}
