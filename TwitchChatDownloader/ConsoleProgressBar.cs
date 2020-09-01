@@ -66,7 +66,6 @@ namespace TwitchChatDownloader
 
                 ClearPreviousOutput(_downloads.Count);
                 PrintProgress();
-                //ResetTimer();
             }
         }
 
@@ -98,10 +97,13 @@ namespace TwitchChatDownloader
                 string text = string.Format("  [{0}{1}] {2,3}% {3}",
                     new string('#', progressBlockCount), new string('-', kBlockCount - progressBlockCount),
                     percent,
-                    kAnimation[_animationIndex++ % kAnimation.Length]);
+                    kAnimation[_animationIndex % kAnimation.Length]);
 
                 Console.WriteLine(video.Value.fileName + text);
             }
+
+            if (_downloads.Count != 0)
+                ++_animationIndex;
         }
 
         private void ResetTimer()
