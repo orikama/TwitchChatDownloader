@@ -34,7 +34,6 @@ namespace TwitchChatDownloader
         public ConsoleProgressBar(int maxConcurrentDownloads)
         {
             _downloads = new(maxConcurrentDownloads);
-            //timer = new Timer(TimerHandler, new AutoResetEvent(false), _animationInterval, _animationInterval);
             timer = new(TimerHandler, null, _animationInterval, _animationInterval);
 
             // A progress bar is only for temporary display in a console window.
@@ -55,7 +54,6 @@ namespace TwitchChatDownloader
         {
             // Make sure value is in range
             value = Math.Clamp(value, 0, _downloads[vdieoID].endValue);
-
             Interlocked.Exchange(ref _downloads[vdieoID].currentValue, value);
         }
 

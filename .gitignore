@@ -4,3 +4,6 @@
 # Build results
 bin/
 obj/
+
+# Ignore launch application arguments
+launchSettings.json

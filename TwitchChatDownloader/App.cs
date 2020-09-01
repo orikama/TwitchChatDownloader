@@ -17,6 +17,9 @@ namespace TwitchChatDownloader
         private static readonly HttpClient s_httpClient = new();
         private static readonly AppSettings s_appSettings = new(s_httpClient); // NOTE: remove static?
 
+        // TODO: Replcae with service locator?
+        private static readonly TwitchVideo _twitchVideo = new(s_appSettings, s_httpClient);
+        private static readonly TwitchUser _twitchUser = new(s_appSettings, s_httpClient);
 
         private const string kBaseUrlVideos = "https://api.twitch.tv/helix/videos";
         //private static readonly string baseUrlComments = //$"https://api.twitch.tv/v5/videos/{videoID}/comments";
@@ -35,16 +38,18 @@ namespace TwitchChatDownloader
             }
         }
 
-        public async Task DownloadChatLogs(long[] videoIDs)
+        public async Task DownloadChatLogs(string[] userNames)
         {
             List<Task> tasks = new(s_appSettings.MaxConcurrentDownloads);
-            List<VideoInfo> videos = await GetVideos(videoIDs);
+            var users = await _twitchUser.GetUsersByNames(userNames);
+            var videos = await _twitchVideo.GetVideosByUserIDs(users.UserID);
+
+            Console.WriteLine($"Downloading {videos.Count} video(s)");
 
             var commentsProcessor = Task.Run(WriteComments);
 
             using (ConsoleProgressBar progressBar = new(s_appSettings.MaxConcurrentDownloads)) {
                 foreach (var video in videos) {
-
                     string fileName = $"{video.StreamerName}_{video.VideoID}";
 
                     progressBar.Add(video.VideoID, fileName, video.DurationSeconds);
@@ -65,36 +70,65 @@ namespace TwitchChatDownloader
             commentsProcessor.Wait();
         }
 
-        private async Task<List<VideoInfo>> GetVideos(long[] videoIDs)
+        public async Task DownloadChatLogs(long[] videoIDs)
         {
-            List<VideoInfo> videos = new(videoIDs.Length);
-            AuthenticationHeaderValue authHeader = new("Bearer", s_appSettings.OAuthToken);
-            string videoUrl = $"{kBaseUrlVideos}?id=";
+            List<Task> tasks = new(s_appSettings.MaxConcurrentDownloads);
+            var videos = await _twitchVideo.GetVideosByUserIDs(null); // FIXME
 
-            foreach (long videoID in videoIDs) {
-                HttpRequestMessage httpRequest = new(HttpMethod.Get, videoUrl + videoID.ToString());
-                httpRequest.Headers.Add("Client-ID", s_appSettings.ClientID);
-                httpRequest.Headers.Authorization = authHeader;
+            var commentsProcessor = Task.Run(WriteComments);
 
+            using (ConsoleProgressBar progressBar = new(s_appSettings.MaxConcurrentDownloads)) {
+                foreach (var video in videos) {
+                    string fileName = $"{video.StreamerName}_{video.VideoID}";
 
-                var resposnseVideo = await s_httpClient.SendAsync(httpRequest);
-                var jsonVideo = await resposnseVideo.Content.ReadFromJsonAsync<JsonGetVideosResponse>();
+                    progressBar.Add(video.VideoID, fileName, video.DurationSeconds);
 
-                // TODO: Test with different values
-                var timeSpan = TimeSpan.ParseExact(jsonVideo.Videos[0].Duration, @"%h\h%m\m%s\s", CultureInfo.InvariantCulture);
-                //Console.WriteLine($"Dur: {jsonVideo.Videos[0].Duration}\tts: {timeSpan.TotalSeconds}");
+                    tasks.Add(Task.Run(() => DownloadChat(video.VideoID, $@"{s_appSettings.OutputPath}\{fileName}.txt", progressBar)));
 
-                videos.Add(new VideoInfo
-                {
-                    StreamerName = jsonVideo.Videos[0].UserName,
-                    DurationSeconds = Convert.ToInt32(timeSpan.TotalSeconds),
-                    VideoID = videoID
-                });
+                    if (tasks.Count == s_appSettings.MaxConcurrentDownloads) {
+                        var t = await Task.WhenAny(tasks);
+                        tasks.Remove(t);
+                    }
+                }
+
+                // NOTE: nice one devs
+                Task.WaitAll(tasks.ToArray());
+                _commentsPipe.CompleteAdding();
             }
 
-            videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
-            return videos;
+            commentsProcessor.Wait();
         }
+
+        //private async Task<List<VideoInfo>> GetVideos(long[] videoIDs)
+        //{
+        //    List<VideoInfo> videos = new(videoIDs.Length);
+        //    AuthenticationHeaderValue authHeader = new("Bearer", s_appSettings.OAuthToken);
+        //    string videoUrl = $"{kBaseUrlVideos}?id=";
+
+        //    foreach (long videoID in videoIDs) {
+        //        HttpRequestMessage httpRequest = new(HttpMethod.Get, videoUrl + videoID.ToString());
+        //        httpRequest.Headers.Add("Client-ID", s_appSettings.ClientID);
+        //        httpRequest.Headers.Authorization = authHeader;
+
+
+        //        var resposnseVideo = await s_httpClient.SendAsync(httpRequest);
+        //        var jsonVideo = await resposnseVideo.Content.ReadFromJsonAsync<JsonGetVideosResponse>();
+
+        //        // TODO: Test with different values
+        //        var timeSpan = TimeSpan.ParseExact(jsonVideo.Videos[0].Duration, @"%h\h%m\m%s\s", CultureInfo.InvariantCulture);
+        //        //Console.WriteLine($"Dur: {jsonVideo.Videos[0].Duration}\tts: {timeSpan.TotalSeconds}");
+
+        //        videos.Add(new VideoInfo
+        //        {
+        //            StreamerName = jsonVideo.Videos[0].UserName,
+        //            DurationSeconds = Convert.ToInt32(timeSpan.TotalSeconds),
+        //            VideoID = videoID
+        //        });
+        //    }
+
+        //    videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
+        //    return videos;
+        //}
 
         private async Task DownloadChat(long videoID, string outputPath, ConsoleProgressBar progressBar)
         {
@@ -145,58 +179,58 @@ namespace TwitchChatDownloader
         }
 
 
-        class VideoInfo
-        {
-            public string StreamerName;
-            public int DurationSeconds;
-            public long VideoID;
-        }
+        //class VideoInfo
+        //{
+        //    public string StreamerName;
+        //    public int DurationSeconds;
+        //    public long VideoID;
+        //}
 
-        class JsonGetVideosResponse
-        {
-            [JsonPropertyName("data")]
-            public JsonVideo[] Videos { get; set; }
-            [JsonPropertyName("pagination")]
-            public JsonVideosPagination Pagination { get; set; }
+        //class JsonGetVideosResponse
+        //{
+        //    [JsonPropertyName("data")]
+        //    public JsonVideo[] Videos { get; set; }
+        //    [JsonPropertyName("pagination")]
+        //    public JsonVideosPagination Pagination { get; set; }
 
-            public class JsonVideosPagination
-            {
-                [JsonPropertyName("cursor")]
-                public string Cursor { get; set; }
-            }
+        //    public class JsonVideosPagination
+        //    {
+        //        [JsonPropertyName("cursor")]
+        //        public string Cursor { get; set; }
+        //    }
 
-            public class JsonVideo
-            {
-                [JsonPropertyName("id")]
-                public string ID { get; set; }   // long
-                [JsonPropertyName("user_id")]
-                public string UserID { get; set; }   // long
-                [JsonPropertyName("user_name")]
-                public string UserName { get; set; }
-                [JsonPropertyName("title")]
-                public string Title { get; set; }
-                [JsonPropertyName("description")]
-                public string Description { get; set; }
-                [JsonPropertyName("created_at")]
-                public DateTime CreatedAt { get; set; }
-                [JsonPropertyName("published_at")]
-                public DateTime PublishedAt { get; set; }
-                [JsonPropertyName("url")]
-                public Uri URL { get; set; }
-                [JsonPropertyName("thumbnail_url")]
-                public Uri ThumbnailURL { get; set; }
-                [JsonPropertyName("viewable")]
-                public string Viewable { get; set; }
-                [JsonPropertyName("view_count")]
-                public long ViewCount { get; set; }    // may be int ?
-                [JsonPropertyName("language")]
-                public string Language { get; set; }
-                [JsonPropertyName("type")]
-                public string Type { get; set; }
-                [JsonPropertyName("duration")]
-                public string Duration { get; set; }
-            }
-        }
+        //    public class JsonVideo
+        //    {
+        //        [JsonPropertyName("id")]
+        //        public string ID { get; set; }   // long
+        //        [JsonPropertyName("user_id")]
+        //        public string UserID { get; set; }   // long
+        //        [JsonPropertyName("user_name")]
+        //        public string UserName { get; set; }
+        //        [JsonPropertyName("title")]
+        //        public string Title { get; set; }
+        //        [JsonPropertyName("description")]
+        //        public string Description { get; set; }
+        //        [JsonPropertyName("created_at")]
+        //        public DateTime CreatedAt { get; set; }
+        //        [JsonPropertyName("published_at")]
+        //        public DateTime PublishedAt { get; set; }
+        //        [JsonPropertyName("url")]
+        //        public Uri URL { get; set; }
+        //        [JsonPropertyName("thumbnail_url")]
+        //        public Uri ThumbnailURL { get; set; }
+        //        [JsonPropertyName("viewable")]
+        //        public string Viewable { get; set; }
+        //        [JsonPropertyName("view_count")]
+        //        public long ViewCount { get; set; }    // may be int ?
+        //        [JsonPropertyName("language")]
+        //        public string Language { get; set; }
+        //        [JsonPropertyName("type")]
+        //        public string Type { get; set; }
+        //        [JsonPropertyName("duration")]
+        //        public string Duration { get; set; }
+        //    }
+        //}
 
         public class JsonComments
         {
