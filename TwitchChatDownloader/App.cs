@@ -39,10 +39,23 @@ namespace TwitchChatDownloader
 
         public async Task DownloadChatLogs(string[] userNames, int? firstVideos)
         {
-            List<Task> tasks = new(s_appSettings.MaxConcurrentDownloads);
             var users = await _twitchUser.GetUsersByNames(userNames);
             var videos = await _twitchVideo.GetVideosByUserIDs(users.UserID, firstVideos);
 
+            await GetMessagesFromVideos(videos);
+        }
+
+        public async Task DownloadChatLogs(string videoIDs)
+        {
+            var videos = await _twitchVideo.GetVideosByVideoIDs(videoIDs);
+
+            await GetMessagesFromVideos(videos);
+        }
+
+
+        private async Task GetMessagesFromVideos(List<TwitchVideo.VideoInfo> videos)
+        {
+            List<Task> tasks = new(s_appSettings.MaxConcurrentDownloads);
             string[] fileNames = new string[videos.Count];
 
             Console.WriteLine($"\nDownloading {videos.Count} video(s)\n");
@@ -75,36 +88,6 @@ namespace TwitchChatDownloader
 
             commentsProcessor.Wait();
         }
-
-        public async Task DownloadChatLogs(string videoIDs)
-        {
-            List<Task> tasks = new(s_appSettings.MaxConcurrentDownloads);
-            var videos = await _twitchVideo.GetVideosByVideoIDs(videoIDs); // FIXME
-
-            var commentsProcessor = Task.Run(WriteComments);
-
-            using (ConsoleProgressBar progressBar = new(s_appSettings.MaxConcurrentDownloads)) {
-                foreach (var video in videos) {
-                    string fileName = $"{video.StreamerName}_{video.VideoID}";
-
-                    progressBar.Add(video.VideoID, fileName, video.DurationSeconds);
-
-                    tasks.Add(Task.Run(() => DownloadChat(video.VideoID, $@"{s_appSettings.OutputPath}\{fileName}.txt", progressBar)));
-
-                    if (tasks.Count == s_appSettings.MaxConcurrentDownloads) {
-                        var t = await Task.WhenAny(tasks);
-                        tasks.Remove(t);
-                    }
-                }
-
-                // NOTE: nice one devs
-                Task.WaitAll(tasks.ToArray());
-                _commentsPipe.CompleteAdding();
-            }
-
-            commentsProcessor.Wait();
-        }
-
 
         private async Task DownloadChat(long videoID, string outputPath, ConsoleProgressBar progressBar)
         {
@@ -246,4 +229,3 @@ namespace TwitchChatDownloader
 
     }
 }
-

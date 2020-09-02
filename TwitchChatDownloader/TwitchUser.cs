@@ -53,6 +53,7 @@ namespace TwitchChatDownloader
 
         public class UserInfos
         {
+            // TODO: naming
             public readonly string[] UserID;
             public readonly string[] DisplayName;
 
