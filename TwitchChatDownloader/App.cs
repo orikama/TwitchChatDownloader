@@ -20,7 +20,7 @@ namespace TwitchChatDownloader
         private static readonly TwitchVideo _twitchVideo = new(s_appSettings, s_httpClient);
         private static readonly TwitchUser _twitchUser = new(s_appSettings, s_httpClient);
 
-        private const string kBaseUrlVideos = "https://api.twitch.tv/helix/videos";
+        //private const string kBaseUrlVideos = "https://api.twitch.tv/helix/videos";
         //private static readonly string baseUrlComments = //$"https://api.twitch.tv/v5/videos/{videoID}/comments";
         private const string kMediaType = "application/vnd.twitchv.v5+json";
 
@@ -37,7 +37,7 @@ namespace TwitchChatDownloader
             }
         }
 
-        public async Task DownloadChatLogs(string[] userNames, int firstVideos)
+        public async Task DownloadChatLogs(string[] userNames, int? firstVideos)
         {
             List<Task> tasks = new(s_appSettings.MaxConcurrentDownloads);
             var users = await _twitchUser.GetUsersByNames(userNames);
@@ -60,7 +60,8 @@ namespace TwitchChatDownloader
                 for (int i = 0; i < videos.Count; ++i) {
                     var index = i;
                     tasks.Add(Task.Run(() => DownloadChat(
-                        videos[index].VideoID, $@"{s_appSettings.OutputPath}/{fileNames[index]}.txt", progressBar, videos[index].DurationSeconds)));
+                        videos[index].VideoID, $@"{s_appSettings.OutputPath}/{fileNames[index]}.txt", progressBar)));
+
                     if (tasks.Count == s_appSettings.MaxConcurrentDownloads) {
                         var t = await Task.WhenAny(tasks);
                         tasks.Remove(t);
@@ -75,43 +76,43 @@ namespace TwitchChatDownloader
             commentsProcessor.Wait();
         }
 
-        //public async Task DownloadChatLogs(long[] videoIDs)
-        //{
-        //    List<Task> tasks = new(s_appSettings.MaxConcurrentDownloads);
-        //    var videos = await _twitchVideo.GetVideosByUserIDs(null, null); // FIXME
+        public async Task DownloadChatLogs(string videoIDs)
+        {
+            List<Task> tasks = new(s_appSettings.MaxConcurrentDownloads);
+            var videos = await _twitchVideo.GetVideosByVideoIDs(videoIDs); // FIXME
 
-        //    var commentsProcessor = Task.Run(WriteComments);
+            var commentsProcessor = Task.Run(WriteComments);
 
-        //    using (ConsoleProgressBar progressBar = new(s_appSettings.MaxConcurrentDownloads)) {
-        //        foreach (var video in videos) {
-        //            string fileName = $"{video.StreamerName}_{video.VideoID}";
+            using (ConsoleProgressBar progressBar = new(s_appSettings.MaxConcurrentDownloads)) {
+                foreach (var video in videos) {
+                    string fileName = $"{video.StreamerName}_{video.VideoID}";
 
-        //            progressBar.Add(video.VideoID, fileName, video.DurationSeconds);
+                    progressBar.Add(video.VideoID, fileName, video.DurationSeconds);
 
-        //            tasks.Add(Task.Run(() => DownloadChat(video.VideoID, $@"{s_appSettings.OutputPath}\{fileName}.txt", progressBar)));
+                    tasks.Add(Task.Run(() => DownloadChat(video.VideoID, $@"{s_appSettings.OutputPath}\{fileName}.txt", progressBar)));
 
-        //            if (tasks.Count == s_appSettings.MaxConcurrentDownloads) {
-        //                var t = await Task.WhenAny(tasks);
-        //                tasks.Remove(t);
-        //            }
-        //        }
+                    if (tasks.Count == s_appSettings.MaxConcurrentDownloads) {
+                        var t = await Task.WhenAny(tasks);
+                        tasks.Remove(t);
+                    }
+                }
 
-        //        // NOTE: nice one devs
-        //        Task.WaitAll(tasks.ToArray());
-        //        _commentsPipe.CompleteAdding();
-        //    }
+                // NOTE: nice one devs
+                Task.WaitAll(tasks.ToArray());
+                _commentsPipe.CompleteAdding();
+            }
 
-        //    commentsProcessor.Wait();
-        //}
+            commentsProcessor.Wait();
+        }
 
 
-        private async Task DownloadChat(long videoID, string outputPath, ConsoleProgressBar progressBar, int duration)
+        private async Task DownloadChat(long videoID, string outputPath, ConsoleProgressBar progressBar)
         {
             string clientID = s_appSettings.ClientID;
             string targetUri = $"https://api.twitch.tv/v5/videos/{videoID}/comments";
             MediaTypeWithQualityHeaderValue mediaType = new(kMediaType);
 
-            string? nextCursor = null;
+            string? nextCursor;
             string query = "";
             StreamWriter sw = new(outputPath);
 

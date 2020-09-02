@@ -1,6 +1,7 @@
 ﻿using System;
 using System.CommandLine;
 using System.CommandLine.Invocation;
+using System.CommandLine.Parsing;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
@@ -21,25 +22,52 @@ namespace TwitchChatDownloader
                     getDefaultValue: () => "settings.json",
                     description: "Path to json settings"
                 ),
-                new Option<string>(
-                    new[] { "--channel", "-c" },
-                    description: "Channel name. You can specify multiple channel names separated with commas"
+                new Option<string?>(
+                    new[] { "--video", "-v" },
+                    description: "Video IDs seprated by commas. 100 Video IDs max"
                 ),
-                new Option<int>(
+                new Option<string?>(
+                    new[] { "--channel", "-c" },
+                    description: "Channel name(s) separated by commas"
+                ),
+                new Option<int?>(
                     new[] { "--first", "-f" },
-                    description: "Get <first> videos from <channel>(s). Should be <= 100. Gets 20 if not specified(twitch default)"
+                    description: "Get <first> videos from <channel>(s). Must be <= 100. Gets 20 for every <channel> if not specified (twitch default)"
                 )
             };
-            rootCommand.Description = "Downloads twitch.tv chat logs.";
+            rootCommand.AddValidator(commandResult =>
+            {
+                bool containsVideo = commandResult.Children.Contains("video");
+                bool containsChannel = commandResult.Children.Contains("channel");
+                bool containsFirst = commandResult.Children.Contains("first");
 
-            rootCommand.Handler = CommandHandler.Create<string, string, int>(RunApp);
+                if ((containsVideo || containsChannel) == false) {
+                    return "Either '--video' or '--channel' option must be specified.";
+                }
+                if (containsVideo && (containsChannel || containsFirst)) {
+                    return "Options '--video' and ('--channel' or '--first') cannot be used together.";
+                }
+
+                if (containsVideo) {
+                    var videoValue = commandResult.ValueForOption<string>("video");
+                    if (videoValue!.Split(',').Length > 100)
+                        return "No more than 100 Video IDs must be specified for --video option";
+                }
+
+                return null;
+            });
+
+            rootCommand.Description = "Downloads twitch.tv chat logs.";
+            rootCommand.Handler = CommandHandler.Create<string, string?, string?, int?>(RunApp);
 
             rootCommand.InvokeAsync(args).Wait();
         }
 
-        static async Task RunApp(string settings, string channel, int first)
+        static async Task RunApp(string settings, string? video, string? channel, int? first)
         {
+            //Console.CursorVisible = false;
             Console.WriteLine("Settings: " + settings);
+            Console.WriteLine("Videos: " + video);
             Console.WriteLine("Channels: " + channel);
             Console.WriteLine("First: " + first);
 
@@ -49,10 +77,14 @@ namespace TwitchChatDownloader
             Stopwatch sw = new();
             sw.Start();
 
-            await app.DownloadChatLogs(channel.Split(','), first);
+            if (video is not null)
+                await app.DownloadChatLogs(video);
+            else if (channel is not null)
+                await app.DownloadChatLogs(channel.Split(','), first);
 
             sw.Stop();
             Console.WriteLine($"\nDone. Time: {sw.Elapsed}");
+            //Console.CursorVisible = true;
         }
     }
 }

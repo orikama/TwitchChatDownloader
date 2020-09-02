@@ -31,7 +31,7 @@ namespace TwitchChatDownloader
             List<VideoInfo> videos = new(userIDs.Length);
             AuthenticationHeaderValue authHeader = new("Bearer", _appSettings.OAuthToken);
 
-            string first = firstVideos is null ? "" : $"first={firstVideos}&";
+            string first = firstVideos.HasValue ? string.Empty : $"first={firstVideos}&";
             string targetUrl = $"{kBaseUrlVideos}?{first}user_id=";
 
             foreach (var userID in userIDs) {
@@ -60,36 +60,66 @@ namespace TwitchChatDownloader
             return videos;
         }
 
-        private async Task<List<VideoInfo>> GetVideosByVideoIDs(long[] videoIDs)
+        public async Task<List<VideoInfo>> GetVideosByVideoIDs(string videoIDs)
         {
             List<VideoInfo> videos = new(videoIDs.Length);
             AuthenticationHeaderValue authHeader = new("Bearer", _appSettings.OAuthToken);
-            string videoUrl = $"{kBaseUrlVideos}?id=";
+            string videoUrl = $"{kBaseUrlVideos}?id={videoIDs}";
 
-            foreach (long videoID in videoIDs) {
-                HttpRequestMessage httpRequest = new(HttpMethod.Get, videoUrl + videoID.ToString());
-                httpRequest.Headers.Add("Client-ID", _appSettings.ClientID);
-                httpRequest.Headers.Authorization = authHeader;
+            HttpRequestMessage httpRequest = new(HttpMethod.Get, videoUrl);
+            httpRequest.Headers.Add("Client-ID", _appSettings.ClientID);
+            httpRequest.Headers.Authorization = authHeader;
 
+            var resposnseVideo = await _httpClient.SendAsync(httpRequest);
+            var jsonVideo = await resposnseVideo.Content.ReadFromJsonAsync<JsonVideosResponse>();
 
-                var resposnseVideo = await _httpClient.SendAsync(httpRequest);
-                var jsonVideo = await resposnseVideo.Content.ReadFromJsonAsync<JsonVideosResponse>();
-
+            foreach (var video in jsonVideo.Videos) {
                 // TODO: Test with different values
-                var timeSpan = TimeSpan.ParseExact(jsonVideo.Videos[0].Duration, s_timeSpanParseFormats, CultureInfo.InvariantCulture);
+                var timeSpan = TimeSpan.ParseExact(video.Duration, s_timeSpanParseFormats, CultureInfo.InvariantCulture);
                 //Console.WriteLine($"Dur: {jsonVideo.Videos[0].Duration}\tts: {timeSpan.TotalSeconds}");
 
                 videos.Add(new VideoInfo
                 {
-                    StreamerName = jsonVideo.Videos[0].UserName,
+                    StreamerName = video.UserName,
                     DurationSeconds = Convert.ToInt32(timeSpan.TotalSeconds),
-                    VideoID = videoID
+                    VideoID = long.Parse(video.VideoID)
                 });
             }
 
             //videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
             return videos;
         }
+
+        //private async Task<List<VideoInfo>> GetVideosByVideoIDs(long[] videoIDs)
+        //{
+        //    List<VideoInfo> videos = new(videoIDs.Length);
+        //    AuthenticationHeaderValue authHeader = new("Bearer", _appSettings.OAuthToken);
+        //    string videoUrl = $"{kBaseUrlVideos}?id=";
+
+        //    foreach (long videoID in videoIDs) {
+        //        HttpRequestMessage httpRequest = new(HttpMethod.Get, videoUrl + videoID.ToString());
+        //        httpRequest.Headers.Add("Client-ID", _appSettings.ClientID);
+        //        httpRequest.Headers.Authorization = authHeader;
+
+
+        //        var resposnseVideo = await _httpClient.SendAsync(httpRequest);
+        //        var jsonVideo = await resposnseVideo.Content.ReadFromJsonAsync<JsonVideosResponse>();
+
+        //        // TODO: Test with different values
+        //        var timeSpan = TimeSpan.ParseExact(jsonVideo.Videos[0].Duration, s_timeSpanParseFormats, CultureInfo.InvariantCulture);
+        //        //Console.WriteLine($"Dur: {jsonVideo.Videos[0].Duration}\tts: {timeSpan.TotalSeconds}");
+
+        //        videos.Add(new VideoInfo
+        //        {
+        //            StreamerName = jsonVideo.Videos[0].UserName,
+        //            DurationSeconds = Convert.ToInt32(timeSpan.TotalSeconds),
+        //            VideoID = videoID
+        //        });
+        //    }
+
+        //    //videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
+        //    return videos;
+        //}
 
 
         public class VideoInfo
