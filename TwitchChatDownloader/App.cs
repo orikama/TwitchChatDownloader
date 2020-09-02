@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -38,24 +37,30 @@ namespace TwitchChatDownloader
             }
         }
 
-        public async Task DownloadChatLogs(string[] userNames)
+        public async Task DownloadChatLogs(string[] userNames, int firstVideos)
         {
             List<Task> tasks = new(s_appSettings.MaxConcurrentDownloads);
             var users = await _twitchUser.GetUsersByNames(userNames);
-            var videos = await _twitchVideo.GetVideosByUserIDs(users.UserID);
+            var videos = await _twitchVideo.GetVideosByUserIDs(users.UserID, firstVideos);
 
-            Console.WriteLine($"Downloading {videos.Count} video(s)");
+            string[] fileNames = new string[videos.Count];
+
+            Console.WriteLine($"\nDownloading {videos.Count} video(s)\n");
 
             var commentsProcessor = Task.Run(WriteComments);
 
             using (ConsoleProgressBar progressBar = new(s_appSettings.MaxConcurrentDownloads)) {
-                foreach (var video in videos) {
-                    string fileName = $"{video.StreamerName}_{video.VideoID}";
+                // NOTE: This shit is so fuckin ugly
+                for (int i = 0; i < videos.Count; ++i) {
+                    var v = videos[i];
+                    fileNames[i] = $"{v.StreamerName}_{v.VideoID}";
+                    progressBar.Add(v.VideoID, fileNames[i], v.DurationSeconds);
+                }
 
-                    progressBar.Add(video.VideoID, fileName, video.DurationSeconds);
-
-                    tasks.Add(Task.Run(() => DownloadChat(video.VideoID, $@"{s_appSettings.OutputPath}\{fileName}.txt", progressBar)));
-
+                for (int i = 0; i < videos.Count; ++i) {
+                    var index = i;
+                    tasks.Add(Task.Run(() => DownloadChat(
+                        videos[index].VideoID, $@"{s_appSettings.OutputPath}/{fileNames[index]}.txt", progressBar, videos[index].DurationSeconds)));
                     if (tasks.Count == s_appSettings.MaxConcurrentDownloads) {
                         var t = await Task.WhenAny(tasks);
                         tasks.Remove(t);
@@ -70,67 +75,37 @@ namespace TwitchChatDownloader
             commentsProcessor.Wait();
         }
 
-        public async Task DownloadChatLogs(long[] videoIDs)
-        {
-            List<Task> tasks = new(s_appSettings.MaxConcurrentDownloads);
-            var videos = await _twitchVideo.GetVideosByUserIDs(null); // FIXME
-
-            var commentsProcessor = Task.Run(WriteComments);
-
-            using (ConsoleProgressBar progressBar = new(s_appSettings.MaxConcurrentDownloads)) {
-                foreach (var video in videos) {
-                    string fileName = $"{video.StreamerName}_{video.VideoID}";
-
-                    progressBar.Add(video.VideoID, fileName, video.DurationSeconds);
-
-                    tasks.Add(Task.Run(() => DownloadChat(video.VideoID, $@"{s_appSettings.OutputPath}\{fileName}.txt", progressBar)));
-
-                    if (tasks.Count == s_appSettings.MaxConcurrentDownloads) {
-                        var t = await Task.WhenAny(tasks);
-                        tasks.Remove(t);
-                    }
-                }
-
-                // NOTE: nice one devs
-                Task.WaitAll(tasks.ToArray());
-                _commentsPipe.CompleteAdding();
-            }
-
-            commentsProcessor.Wait();
-        }
-
-        //private async Task<List<VideoInfo>> GetVideos(long[] videoIDs)
+        //public async Task DownloadChatLogs(long[] videoIDs)
         //{
-        //    List<VideoInfo> videos = new(videoIDs.Length);
-        //    AuthenticationHeaderValue authHeader = new("Bearer", s_appSettings.OAuthToken);
-        //    string videoUrl = $"{kBaseUrlVideos}?id=";
+        //    List<Task> tasks = new(s_appSettings.MaxConcurrentDownloads);
+        //    var videos = await _twitchVideo.GetVideosByUserIDs(null, null); // FIXME
 
-        //    foreach (long videoID in videoIDs) {
-        //        HttpRequestMessage httpRequest = new(HttpMethod.Get, videoUrl + videoID.ToString());
-        //        httpRequest.Headers.Add("Client-ID", s_appSettings.ClientID);
-        //        httpRequest.Headers.Authorization = authHeader;
+        //    var commentsProcessor = Task.Run(WriteComments);
 
+        //    using (ConsoleProgressBar progressBar = new(s_appSettings.MaxConcurrentDownloads)) {
+        //        foreach (var video in videos) {
+        //            string fileName = $"{video.StreamerName}_{video.VideoID}";
 
-        //        var resposnseVideo = await s_httpClient.SendAsync(httpRequest);
-        //        var jsonVideo = await resposnseVideo.Content.ReadFromJsonAsync<JsonGetVideosResponse>();
+        //            progressBar.Add(video.VideoID, fileName, video.DurationSeconds);
 
-        //        // TODO: Test with different values
-        //        var timeSpan = TimeSpan.ParseExact(jsonVideo.Videos[0].Duration, @"%h\h%m\m%s\s", CultureInfo.InvariantCulture);
-        //        //Console.WriteLine($"Dur: {jsonVideo.Videos[0].Duration}\tts: {timeSpan.TotalSeconds}");
+        //            tasks.Add(Task.Run(() => DownloadChat(video.VideoID, $@"{s_appSettings.OutputPath}\{fileName}.txt", progressBar)));
 
-        //        videos.Add(new VideoInfo
-        //        {
-        //            StreamerName = jsonVideo.Videos[0].UserName,
-        //            DurationSeconds = Convert.ToInt32(timeSpan.TotalSeconds),
-        //            VideoID = videoID
-        //        });
+        //            if (tasks.Count == s_appSettings.MaxConcurrentDownloads) {
+        //                var t = await Task.WhenAny(tasks);
+        //                tasks.Remove(t);
+        //            }
+        //        }
+
+        //        // NOTE: nice one devs
+        //        Task.WaitAll(tasks.ToArray());
+        //        _commentsPipe.CompleteAdding();
         //    }
 
-        //    videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
-        //    return videos;
+        //    commentsProcessor.Wait();
         //}
 
-        private async Task DownloadChat(long videoID, string outputPath, ConsoleProgressBar progressBar)
+
+        private async Task DownloadChat(long videoID, string outputPath, ConsoleProgressBar progressBar, int duration)
         {
             string clientID = s_appSettings.ClientID;
             string targetUri = $"https://api.twitch.tv/v5/videos/{videoID}/comments";
@@ -159,8 +134,11 @@ namespace TwitchChatDownloader
                 nextCursor = jsonComments.Next;
                 query = $"?cursor={nextCursor}";
 
-                progressBar.Report(videoID, Convert.ToInt32(jsonComments.Comments[^1].ContentOffsetSeconds));
+                int offset = Convert.ToInt32(jsonComments.Comments[^1].ContentOffsetSeconds);
+                progressBar.Report(videoID, offset);
             } while (nextCursor is not null);
+
+            progressBar.Report(videoID, -1);
         }
 
 
@@ -170,7 +148,7 @@ namespace TwitchChatDownloader
                 var sw = part.Item1;
                 var jc = part.Item2;
                 foreach (var comment in jc.Comments) {
-                    sw.WriteLine(comment.Commenter.Name + ": " + comment.Message.Body);
+                    sw.WriteLine($"{comment.ContentOffsetSeconds}\t{comment.Commenter.Name}: {comment.Message.Body}");
                 }
 
                 if (jc.Next is null)
@@ -178,59 +156,6 @@ namespace TwitchChatDownloader
             }
         }
 
-
-        //class VideoInfo
-        //{
-        //    public string StreamerName;
-        //    public int DurationSeconds;
-        //    public long VideoID;
-        //}
-
-        //class JsonGetVideosResponse
-        //{
-        //    [JsonPropertyName("data")]
-        //    public JsonVideo[] Videos { get; set; }
-        //    [JsonPropertyName("pagination")]
-        //    public JsonVideosPagination Pagination { get; set; }
-
-        //    public class JsonVideosPagination
-        //    {
-        //        [JsonPropertyName("cursor")]
-        //        public string Cursor { get; set; }
-        //    }
-
-        //    public class JsonVideo
-        //    {
-        //        [JsonPropertyName("id")]
-        //        public string ID { get; set; }   // long
-        //        [JsonPropertyName("user_id")]
-        //        public string UserID { get; set; }   // long
-        //        [JsonPropertyName("user_name")]
-        //        public string UserName { get; set; }
-        //        [JsonPropertyName("title")]
-        //        public string Title { get; set; }
-        //        [JsonPropertyName("description")]
-        //        public string Description { get; set; }
-        //        [JsonPropertyName("created_at")]
-        //        public DateTime CreatedAt { get; set; }
-        //        [JsonPropertyName("published_at")]
-        //        public DateTime PublishedAt { get; set; }
-        //        [JsonPropertyName("url")]
-        //        public Uri URL { get; set; }
-        //        [JsonPropertyName("thumbnail_url")]
-        //        public Uri ThumbnailURL { get; set; }
-        //        [JsonPropertyName("viewable")]
-        //        public string Viewable { get; set; }
-        //        [JsonPropertyName("view_count")]
-        //        public long ViewCount { get; set; }    // may be int ?
-        //        [JsonPropertyName("language")]
-        //        public string Language { get; set; }
-        //        [JsonPropertyName("type")]
-        //        public string Type { get; set; }
-        //        [JsonPropertyName("duration")]
-        //        public string Duration { get; set; }
-        //    }
-        //}
 
         public class JsonComments
         {
@@ -240,8 +165,7 @@ namespace TwitchChatDownloader
             [JsonPropertyName("_next")]
             public string? Next { get; set; }
 
-            //class JsonChat
-            //{
+
             public class JsonComment
             {
                 [JsonPropertyName("_id")]

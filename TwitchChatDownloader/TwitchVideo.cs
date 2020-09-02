@@ -1,11 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
@@ -28,12 +26,13 @@ namespace TwitchChatDownloader
             _httpClient = httpClient;
         }
 
-        public async Task<List<VideoInfo>> GetVideosByUserIDs(string[] userIDs)
+        public async Task<List<VideoInfo>> GetVideosByUserIDs(string[] userIDs, int? firstVideos)
         {
             List<VideoInfo> videos = new(userIDs.Length);
             AuthenticationHeaderValue authHeader = new("Bearer", _appSettings.OAuthToken);
-            
-            string targetUrl = $"{kBaseUrlVideos}?user_id=";
+
+            string first = firstVideos is null ? "" : $"first={firstVideos}&";
+            string targetUrl = $"{kBaseUrlVideos}?{first}user_id=";
 
             foreach (var userID in userIDs) {
                 HttpRequestMessage httpRequest = new(HttpMethod.Get, $"{targetUrl}{userID}");
@@ -43,7 +42,7 @@ namespace TwitchChatDownloader
                 var resposnseVideos = await _httpClient.SendAsync(httpRequest);
                 var jsonVideos = await resposnseVideos.Content.ReadFromJsonAsync<JsonVideosResponse>();
 
-                foreach(var jsonVideo in jsonVideos.Videos) {
+                foreach (var jsonVideo in jsonVideos.Videos) {
                     // TODO: Test with different values
                     var timeSpan = TimeSpan.ParseExact(jsonVideo.Duration, s_timeSpanParseFormats, CultureInfo.InvariantCulture);
                     //Console.WriteLine($"Dur: {jsonVideo.Videos[0].Duration}\tts: {timeSpan.TotalSeconds}");
@@ -52,7 +51,7 @@ namespace TwitchChatDownloader
                     {
                         StreamerName = jsonVideo.UserName,
                         DurationSeconds = Convert.ToInt32(timeSpan.TotalSeconds),
-                        VideoID = int.Parse(jsonVideo.VideoID)
+                        VideoID = long.Parse(jsonVideo.VideoID)
                     });
                 }
             }
@@ -146,7 +145,6 @@ namespace TwitchChatDownloader
                 public string Duration { get; set; }
             }
         }
-
 
     }
 }

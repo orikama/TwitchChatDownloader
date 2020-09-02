@@ -13,11 +13,12 @@ namespace TwitchChatDownloader
     /// </summary>
     public class ConsoleProgressBar : IDisposable //, IProgress<int>
     {
-        private const int kBlockCount = 10;
-        private const string kAnimation = @"|/-\";
+        private const int kBlockCount = 20;
+        private const int kFileNamePadding = 35;
 
         private readonly TimeSpan _animationInterval = TimeSpan.FromSeconds(1.0);
-        private readonly Timer timer;
+        private readonly Timer _timer;
+        private bool _disposed = false;
 
         private class DownloadProgress
         {
@@ -26,15 +27,13 @@ namespace TwitchChatDownloader
             public string fileName;
         }
         private readonly Dictionary<long, DownloadProgress> _downloads;
-
-        private bool _disposed = false;
-        private int _animationIndex = 0;
+        private int _currentDownloads = 0;
 
 
         public ConsoleProgressBar(int maxConcurrentDownloads)
         {
             _downloads = new(maxConcurrentDownloads);
-            timer = new(TimerHandler, null, _animationInterval, _animationInterval);
+            _timer = new(TimerHandler, null, _animationInterval, _animationInterval);
 
             // A progress bar is only for temporary display in a console window.
             // If the console output is redirected to a file, draw nothing.
@@ -46,23 +45,21 @@ namespace TwitchChatDownloader
 
         public void Add(long videoID, string fileName, int endValue)
         {
-            Console.WriteLine();
             _downloads.Add(videoID, new DownloadProgress { currentValue = 0, endValue = endValue, fileName = fileName });
         }
 
-        public void Report(long vdieoID, int value)
+        public void Report(long videoID, int value)
         {
-            // Make sure value is in range
-            value = Math.Clamp(value, 0, _downloads[vdieoID].endValue);
-            Interlocked.Exchange(ref _downloads[vdieoID].currentValue, value);
+            value = Math.Min(value, _downloads[videoID].endValue);
+            Interlocked.Exchange(ref _downloads[videoID].currentValue, value);
         }
 
         private void TimerHandler(object state)
         {
-            lock (timer) {
+            lock (_timer) {
                 if (_disposed) return;
 
-                ClearPreviousOutput(_downloads.Count);
+                ClearPreviousOutput(_currentDownloads);
                 PrintProgress();
             }
         }
@@ -77,41 +74,42 @@ namespace TwitchChatDownloader
 
         private void PrintProgress()
         {
-            var videoIDs = _downloads.Keys.ToImmutableArray();
-
-            foreach (var videoID in videoIDs) {
+            foreach (var videoID in _downloads.Keys.ToImmutableArray()) {
                 var progress = _downloads[videoID];
-                if (progress.currentValue == progress.endValue) {
+                if (progress.currentValue == -1) {
+                    Console.WriteLine(progress.fileName.PadRight(kFileNamePadding) + " Done.");
                     _downloads.Remove(videoID);
-                    Console.WriteLine(progress.fileName + " Done.");
                 }
             }
 
-            foreach (var video in _downloads) {
-                double p = (double)video.Value.currentValue / video.Value.endValue;
-                int progressBlockCount = (int)(p * kBlockCount);
-                int percent = (int)(p * 100);
+            _currentDownloads = 0;
 
-                string text = string.Format("  [{0}{1}] {2,3}% {3}",
-                    new string('#', progressBlockCount), new string('-', kBlockCount - progressBlockCount),
-                    percent,
-                    kAnimation[_animationIndex % kAnimation.Length]);
+            foreach (var video in _downloads.Values)
+                if (video.currentValue != 0) {
+                    Console.Write(video.fileName.PadRight(kFileNamePadding));
+                    if (video.currentValue == video.endValue) {
+                        Console.WriteLine(" Downloading comments that were posted after the VOD finished");
+                    } else {
+                        double percent = (double)video.currentValue / video.endValue;
+                        int progressBlockCount = (int)(percent * kBlockCount);
 
-                Console.WriteLine(video.Value.fileName + text);
-            }
+                        string s = new string('=', progressBlockCount) + ">";
+                        string text = string.Format(" [{0}] {1,8:P2}", s.PadRight(kBlockCount), percent);
 
-            if (_downloads.Count != 0)
-                ++_animationIndex;
+                        Console.WriteLine(text);
+                    }
+                    ++_currentDownloads;
+                }
         }
 
         private void ResetTimer()
         {
-            timer.Change(_animationInterval, TimeSpan.FromMilliseconds(-1));
+            _timer.Change(_animationInterval, TimeSpan.FromMilliseconds(-1));
         }
 
         public void Dispose()
         {
-            lock (timer) {
+            lock (_timer) {
                 _disposed = true;
                 //UpdateText(string.Empty);
             }
