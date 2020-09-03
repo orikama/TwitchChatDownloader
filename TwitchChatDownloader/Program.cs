@@ -71,7 +71,9 @@ namespace TwitchChatDownloader
                 //Console.CursorVisible = false;
 
                 App app = new();
+                // TODO: I need to fix this mess with AppSettings
                 await app.Init(settings);
+                await AppSettings.SaveAsync();
 
                 Stopwatch sw = new();
                 sw.Start();
@@ -83,6 +85,7 @@ namespace TwitchChatDownloader
 
                 sw.Stop();
                 Console.WriteLine($"\nDone. Time: {sw.Elapsed}");
+
                 //Console.CursorVisible = true;
             }
             catch (Exception e) {

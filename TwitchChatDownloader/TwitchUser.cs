@@ -66,7 +66,7 @@ namespace TwitchChatDownloader
                 [JsonPropertyName("offline_image_url")]
                 public Uri OfflienImageUrl { get; set; }
                 [JsonPropertyName("view_count")]
-                public int ViewCount { get; set; }    // may be int ?
+                public int ViewCount { get; set; }
                 [JsonPropertyName("email")]
                 public string Email { get; set; }
             }

@@ -14,7 +14,7 @@ namespace TwitchChatDownloader
 
         public async Task Init(string settingsPath)
         {
-            await AppSettings.Load(settingsPath);
+            await AppSettings.LoadAsync(settingsPath);
 
             if (Directory.Exists(AppSettings.OutputPath) == false) {
                 Directory.CreateDirectory(AppSettings.OutputPath);
@@ -55,18 +55,16 @@ namespace TwitchChatDownloader
                 }
 
                 for (int i = 0; i < videos.Count; ++i) {
-                    var index = i;
+                    int index = i;
                     tasks.Add(Task.Run(() => TwitchComment.GetCommentsAsync(
                         videos[index].VideoID, $@"{AppSettings.OutputPath}/{fileNames[index]}.txt", progressBar, _commentsPipe)));
 
-                    // FIXME:
-                    if (tasks.Count == AppSettings.MaxConcurrentDownloads) {
+                    if (i + 1 < videos.Count && tasks.Count == AppSettings.MaxConcurrentDownloads) {
                         var t = await Task.WhenAny(tasks);
                         tasks.Remove(t);
                     }
                 }
 
-                // NOTE: nice one devs
                 Task.WaitAll(tasks.ToArray());
                 _commentsPipe.CompleteAdding();
             }
@@ -77,15 +75,14 @@ namespace TwitchChatDownloader
 
         private void WriteComments()
         {
-            foreach (var part in _commentsPipe.GetConsumingEnumerable()) {
-                var sw = part.Item1;
-                var jc = part.Item2;
-                foreach (var comment in jc.Comments) {
-                    sw.WriteLine($"{comment.ContentOffsetSeconds}\t{comment.Commenter.Name}: {comment.Message.Body}");
+            foreach (var (streamWriter, jsonComments) in _commentsPipe.GetConsumingEnumerable()) {
+                foreach (var comment in jsonComments.Comments) {
+                    streamWriter.WriteLine($"{comment.ContentOffsetSeconds}\t{comment.Commenter.Name}: {comment.Message.Body}");
                 }
 
-                if (jc.Next is null)
-                    sw.Close();
+                if (jsonComments.Next is null) {
+                    streamWriter.Close();
+                }
             }
         }
     }

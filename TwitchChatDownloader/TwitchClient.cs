@@ -32,6 +32,7 @@ namespace TwitchChatDownloader
         {
             var httpRequest = MakeHttpRequest(type, query);
             var response = await s_httpClient.SendAsync(httpRequest);
+            httpRequest.Dispose();
 
             return response;
         }
@@ -49,6 +50,7 @@ namespace TwitchChatDownloader
         {
             HttpRequestMessage httpRequest;
 
+            // NOTE: This looks great
             switch (type) {
                 case RequestType.OAuthValidate:
                     httpRequest = new(HttpMethod.Get, kBaseUriOAuth + "validate");

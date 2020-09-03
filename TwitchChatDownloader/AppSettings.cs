@@ -20,7 +20,7 @@ namespace TwitchChatDownloader
         private static string _settingsPath;
 
 
-        public static async Task Load(string settingsPath)
+        public static async Task LoadAsync(string settingsPath)
         {
             _settingsPath = settingsPath;
 
@@ -31,19 +31,19 @@ namespace TwitchChatDownloader
                 throw new ArgumentException($"You must specify ClientID and ClientSecret in your: {settingsPath}");
             }
 
-            if (_jsonAppSettings.OAuthToken.Length == 0 || await IsTokenValid() == false) {
+            if (_jsonAppSettings.OAuthToken.Length == 0 || await ValidateTokenAsync() == false) {
                 _jsonAppSettings.OAuthToken = await GetNewOAuthTokenAsync();
             }
         }
 
-        public static async Task Save()
+        public static async Task SaveAsync()
         {
-            using FileStream fs = new FileStream(_settingsPath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 4096, true);
+            using FileStream fs = new FileStream(_settingsPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
             await JsonSerializer.SerializeAsync(fs, _jsonAppSettings, new JsonSerializerOptions { WriteIndented = true });
         }
 
 
-        private static async Task<bool> IsTokenValid()
+        private static async Task<bool> ValidateTokenAsync()
         {
             var responseOAuthValidation = await TwitchClient.GetAsync(TwitchClient.RequestType.Comment);
 
@@ -71,7 +71,7 @@ namespace TwitchChatDownloader
         }
 
         // https://dev.twitch.tv/docs/authentication/getting-tokens-oauth#oauth-client-credentials-flow
-        // NOTE: Commented properties were not actually presented in response?
+        // NOTE: Commented out properties were not actually presented in response?
         private class JsonAppOAuthTokenResponse
         {
             [JsonPropertyName("access_token")]

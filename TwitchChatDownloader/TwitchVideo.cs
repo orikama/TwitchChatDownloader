@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
@@ -9,9 +10,6 @@ namespace TwitchChatDownloader
 {
     static class TwitchVideo
     {
-        private static readonly string[] s_timeSpanParseFormats = { @"%h\h%m\m%s\s", @"%m\m%s\s", @"%s\s" };
-
-
         public static async Task<List<VideoInfo>> GetVideosByUserIDs(string[] userIDs, int? firstVideos)
         {
             List<VideoInfo> videos = new(userIDs.Length);
@@ -20,20 +18,9 @@ namespace TwitchChatDownloader
             string query = $"{first}user_id=";
 
             foreach (var userID in userIDs) {
-                var jsonVideos = await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, $"{query}{userID}");
+                var jsonVideos = (await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, $"{query}{userID}")).Videos;
 
-                foreach (var jsonVideo in jsonVideos.Videos) {
-                    // TODO: Test with different values
-                    var timeSpan = TimeSpan.ParseExact(jsonVideo.Duration, s_timeSpanParseFormats, CultureInfo.InvariantCulture);
-                    //Console.WriteLine($"Dur: {jsonVideo.Videos[0].Duration}\tts: {timeSpan.TotalSeconds}");
-
-                    videos.Add(new VideoInfo
-                    {
-                        StreamerName = jsonVideo.UserName,
-                        DurationSeconds = Convert.ToInt32(timeSpan.TotalSeconds),
-                        VideoID = long.Parse(jsonVideo.VideoID)
-                    });
-                }
+                GetVideos(videos, jsonVideos);
             }
 
             videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
@@ -42,37 +29,41 @@ namespace TwitchChatDownloader
 
         public static async Task<List<VideoInfo>> GetVideosByVideoIDs(string videoIDs)
         {
-            List<VideoInfo> videos = new(); //new(videoIDs.Length); FIXME: Its a string now
+            // NOTE: I can use videoIDs.Count(c => c == ',') to get list capacity, but is it worth it?
+            List<VideoInfo> videos = new();
             string query = $"id={videoIDs}";
 
-            var jsonVideos = await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, query);
+            var jsonVideos = (await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, query)).Videos;
 
-            foreach (var jsonVideo in jsonVideos.Videos) {
-                // TODO: Test with different values
-                var timeSpan = TimeSpan.ParseExact(jsonVideo.Duration, s_timeSpanParseFormats, CultureInfo.InvariantCulture);
-                //Console.WriteLine($"Dur: {jsonVideo.Videos[0].Duration}\tts: {timeSpan.TotalSeconds}");
-
-                videos.Add(new VideoInfo
-                {
-                    StreamerName = jsonVideo.UserName,
-                    DurationSeconds = Convert.ToInt32(timeSpan.TotalSeconds),
-                    VideoID = long.Parse(jsonVideo.VideoID)
-                });
-            }
+            GetVideos(videos, jsonVideos);
 
             videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
             return videos;
         }
 
 
-        public class VideoInfo
+        private static void GetVideos(List<VideoInfo> videos, JsonVideosResponse.JsonVideo[] jsonVideos)
         {
-            public string StreamerName;
-            public int DurationSeconds;
-            public long VideoID;
+            // NOTE: LINQ?
+            foreach (var jsonVideo in jsonVideos) {
+                videos.Add(new VideoInfo
+                {
+                    StreamerName = jsonVideo.UserName,
+                    DurationSeconds = jsonVideo.Duration,
+                    VideoID = long.Parse(jsonVideo.VideoID)
+                });
+            }
         }
 
 
+        public class VideoInfo
+        {
+            public string StreamerName;
+            public string DurationSeconds;
+            public long VideoID;
+        }
+
+        // NOTE: Add to this Json classes 'data' keyword with C# 9 ?
         private class JsonVideosResponse
         {
             [JsonPropertyName("data")]
