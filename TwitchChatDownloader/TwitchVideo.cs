@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -10,36 +8,22 @@ using System.Threading.Tasks;
 
 namespace TwitchChatDownloader
 {
-    class TwitchVideo
+    static class TwitchVideo
     {
-        private const string kBaseUrlVideos = "https://api.twitch.tv/helix/videos";
         // TODO: Add support for videos with duration < 1m ?
         private static readonly string[] s_timeSpanParseFormats = { @"%h\h%m\m%s\s", @"%m\m%s\s" };
 
-        private readonly HttpClient _httpClient; // TODO: remove it
-        private readonly AppSettings _appSettings; // TODO: remove it
 
-
-        public TwitchVideo(AppSettings appSettings, HttpClient httpClient)
-        {
-            _appSettings = appSettings;
-            _httpClient = httpClient;
-        }
-
-        public async Task<List<VideoInfo>> GetVideosByUserIDs(string[] userIDs, int? firstVideos)
+        public static async Task<List<VideoInfo>> GetVideosByUserIDs(string[] userIDs, int? firstVideos)
         {
             List<VideoInfo> videos = new(userIDs.Length);
-            AuthenticationHeaderValue authHeader = new("Bearer", _appSettings.OAuthToken);
 
             string first = firstVideos.HasValue ? $"first={firstVideos}&" : string.Empty;
-            string targetUrl = $"{kBaseUrlVideos}?{first}user_id=";
+            string query = $"{first}user_id=";
 
             foreach (var userID in userIDs) {
-                HttpRequestMessage httpRequest = new(HttpMethod.Get, $"{targetUrl}{userID}");
-                httpRequest.Headers.Add("Client-ID", _appSettings.ClientID);
-                httpRequest.Headers.Authorization = authHeader;
 
-                var resposnseVideos = await _httpClient.SendAsync(httpRequest);
+                var resposnseVideos = await TwitchClient.SendAsync(TwitchClient.RequestType.Video, $"{query}{userID}");
                 var jsonVideos = await resposnseVideos.Content.ReadFromJsonAsync<JsonVideosResponse>();
 
                 foreach (var jsonVideo in jsonVideos.Videos) {
@@ -60,17 +44,12 @@ namespace TwitchChatDownloader
             return videos;
         }
 
-        public async Task<List<VideoInfo>> GetVideosByVideoIDs(string videoIDs)
+        public static async Task<List<VideoInfo>> GetVideosByVideoIDs(string videoIDs)
         {
-            List<VideoInfo> videos = new(videoIDs.Length);
-            AuthenticationHeaderValue authHeader = new("Bearer", _appSettings.OAuthToken);
-            string videoUrl = $"{kBaseUrlVideos}?id={videoIDs}";
+            List<VideoInfo> videos = new(); //new(videoIDs.Length); FIXME: Its a string now
+            string query = $"id={videoIDs}";
 
-            HttpRequestMessage httpRequest = new(HttpMethod.Get, videoUrl);
-            httpRequest.Headers.Add("Client-ID", _appSettings.ClientID);
-            httpRequest.Headers.Authorization = authHeader;
-
-            var resposnseVideo = await _httpClient.SendAsync(httpRequest);
+            var resposnseVideo = await TwitchClient.SendAsync(TwitchClient.RequestType.Video, query);
             var jsonVideo = await resposnseVideo.Content.ReadFromJsonAsync<JsonVideosResponse>();
 
             foreach (var video in jsonVideo.Videos) {

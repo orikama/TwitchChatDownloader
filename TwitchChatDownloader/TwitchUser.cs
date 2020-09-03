@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -8,35 +6,16 @@ using System.Threading.Tasks;
 
 namespace TwitchChatDownloader
 {
-    class TwitchUser
+    static class TwitchUser
     {
-        private const string kBaseUrlUsers = "https://api.twitch.tv/helix/users";
-
-        private readonly HttpClient _httpClient; // TODO: remove it
-        private readonly AppSettings _appSettings; // TODO: remove it
-
-
-        public TwitchUser(AppSettings appSettings, HttpClient httpClient)
-        {
-            _appSettings = appSettings;
-            _httpClient = httpClient;
-        }
-
-        // NOTE: I think userNames should be already concatenated("<user1>,<user2>") by this point
-        //   Turns out the answer is no, query should be in "?login=<login1>&login=<login2>" format
-        public async Task<UserInfos> GetUsersByNames(string[] userNames)
+        public static async Task<UserInfos> GetUsersByNames(string[] userNames)
         {
             UserInfos users = new(userNames.Length);
-            AuthenticationHeaderValue authHeader = new("Bearer", _appSettings.OAuthToken);
 
-            var query = string.Join("&login=", userNames);
-            var requestUrl = $"{kBaseUrlUsers}?login={query}";
+            var logins = string.Join("&login=", userNames);
+            var query = $"login={logins}";
 
-            HttpRequestMessage httpRequest = new(HttpMethod.Get, requestUrl);
-            httpRequest.Headers.Add("Client-ID", _appSettings.ClientID);
-            httpRequest.Headers.Authorization = authHeader;
-
-            var resposnseUsers = await _httpClient.SendAsync(httpRequest);
+            var resposnseUsers = await TwitchClient.SendAsync(TwitchClient.RequestType.User, query);
             var jsonUsers = (await resposnseUsers.Content.ReadFromJsonAsync<JsonUsersResponse>()).Users;
 
             // NOTE: Use LINQ?

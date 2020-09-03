@@ -1,53 +1,32 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 
 namespace TwitchChatDownloader
 {
-    class TwitchComment
+    static class TwitchComment
     {
-        private const string kMediaType = "application/vnd.twitchv.v5+json";
-
-
-        private readonly HttpClient _httpClient; // TODO: remove it
-        private readonly AppSettings _appSettings; // TODO: remove it
-
-
-        public TwitchComment(AppSettings appSettings, HttpClient httpClient)
+        public static async Task GetComments(long videoID, string outputPath, ConsoleProgressBar progressBar, BlockingCollection<Tuple<StreamWriter, TwitchComment.JsonComments>> commentsPipe)
         {
-            _appSettings = appSettings;
-            _httpClient = httpClient;
-        }
-
-
-        public async Task GetComments(long videoID, string outputPath, ConsoleProgressBar progressBar, BlockingCollection<Tuple<StreamWriter, TwitchComment.JsonComments>> commentsPipe)
-        {
-            string clientID = _appSettings.ClientID;
-            string targetUri = $"https://api.twitch.tv/v5/videos/{videoID}/comments";
-            MediaTypeWithQualityHeaderValue mediaType = new(kMediaType);
+            //string targetUri = $"https://api.twitch.tv/v5/videos/{videoID}/comments";
 
             string? nextCursor;
+            string video = $"{videoID}/comments";
             string query = "";
+
             StreamWriter sw = new(outputPath);
 
             do {
-                HttpRequestMessage httpRequest = new(HttpMethod.Get, targetUri + query);
-                httpRequest.Headers.Add("Client-ID", clientID);
-                httpRequest.Headers.Accept.Add(mediaType);
+                string requestUri = video + query;
 
                 //Stopwatch stw = new();
                 //stw.Start();
 
-                var responseComments = await _httpClient.SendAsync(httpRequest);
+                var responseComments = await TwitchClient.SendAsync(TwitchClient.RequestType.Comment, requestUri);
                 var jsonComments = await responseComments.Content.ReadFromJsonAsync<JsonComments>();
 
                 //stw.Stop();

@@ -10,6 +10,8 @@ namespace TwitchChatDownloader
 {
     class Program
     {
+        // 722853909 - bench
+        // 726899014 - small
         //private static readonly long[] videoIDs = { 726899014, 725941824, 724951642, 722853909, 724072801, 721832986 };
         //private static readonly string[] userIDs = { "admiralbulldog", "moonmoon" };
 
@@ -66,10 +68,6 @@ namespace TwitchChatDownloader
         static async Task RunApp(string settings, string? video, string? channel, int? first)
         {
             //Console.CursorVisible = false;
-            Console.WriteLine("Settings: " + settings);
-            Console.WriteLine("Videos: " + video);
-            Console.WriteLine("Channels: " + channel);
-            Console.WriteLine("First: " + first);
 
             App app = new();
             await app.Init(settings);
