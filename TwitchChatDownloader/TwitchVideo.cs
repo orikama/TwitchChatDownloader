@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
@@ -10,8 +9,7 @@ namespace TwitchChatDownloader
 {
     static class TwitchVideo
     {
-        // TODO: Add support for videos with duration < 1m ?
-        private static readonly string[] s_timeSpanParseFormats = { @"%h\h%m\m%s\s", @"%m\m%s\s" };
+        private static readonly string[] s_timeSpanParseFormats = { @"%h\h%m\m%s\s", @"%m\m%s\s", @"%s\s" };
 
 
         public static async Task<List<VideoInfo>> GetVideosByUserIDs(string[] userIDs, int? firstVideos)
@@ -22,9 +20,7 @@ namespace TwitchChatDownloader
             string query = $"{first}user_id=";
 
             foreach (var userID in userIDs) {
-
-                var resposnseVideos = await TwitchClient.SendAsync(TwitchClient.RequestType.Video, $"{query}{userID}");
-                var jsonVideos = await resposnseVideos.Content.ReadFromJsonAsync<JsonVideosResponse>();
+                var jsonVideos = await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, $"{query}{userID}");
 
                 foreach (var jsonVideo in jsonVideos.Videos) {
                     // TODO: Test with different values
@@ -49,19 +45,18 @@ namespace TwitchChatDownloader
             List<VideoInfo> videos = new(); //new(videoIDs.Length); FIXME: Its a string now
             string query = $"id={videoIDs}";
 
-            var resposnseVideo = await TwitchClient.SendAsync(TwitchClient.RequestType.Video, query);
-            var jsonVideo = await resposnseVideo.Content.ReadFromJsonAsync<JsonVideosResponse>();
+            var jsonVideos = await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, query);
 
-            foreach (var video in jsonVideo.Videos) {
+            foreach (var jsonVideo in jsonVideos.Videos) {
                 // TODO: Test with different values
-                var timeSpan = TimeSpan.ParseExact(video.Duration, s_timeSpanParseFormats, CultureInfo.InvariantCulture);
+                var timeSpan = TimeSpan.ParseExact(jsonVideo.Duration, s_timeSpanParseFormats, CultureInfo.InvariantCulture);
                 //Console.WriteLine($"Dur: {jsonVideo.Videos[0].Duration}\tts: {timeSpan.TotalSeconds}");
 
                 videos.Add(new VideoInfo
                 {
-                    StreamerName = video.UserName,
+                    StreamerName = jsonVideo.UserName,
                     DurationSeconds = Convert.ToInt32(timeSpan.TotalSeconds),
-                    VideoID = long.Parse(video.VideoID)
+                    VideoID = long.Parse(jsonVideo.VideoID)
                 });
             }
 
@@ -123,6 +118,5 @@ namespace TwitchChatDownloader
                 public string Duration { get; set; }
             }
         }
-
     }
 }

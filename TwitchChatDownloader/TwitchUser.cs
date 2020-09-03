@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
@@ -8,15 +7,14 @@ namespace TwitchChatDownloader
 {
     static class TwitchUser
     {
-        public static async Task<UserInfos> GetUsersByNames(string[] userNames)
+        public static async Task<UserInfos> GetUsersByNamesAsync(string[] userNames)
         {
             UserInfos users = new(userNames.Length);
 
             var logins = string.Join("&login=", userNames);
             var query = $"login={logins}";
 
-            var resposnseUsers = await TwitchClient.SendAsync(TwitchClient.RequestType.User, query);
-            var jsonUsers = (await resposnseUsers.Content.ReadFromJsonAsync<JsonUsersResponse>()).Users;
+            var jsonUsers = (await TwitchClient.GetJsonAsync<JsonUsersResponse>(TwitchClient.RequestType.User, query)).Users;
 
             // NOTE: Use LINQ?
             //  or WithIndex() extension https://thomaslevesque.com/2019/11/18/using-foreach-with-index-in-c/
@@ -73,6 +71,5 @@ namespace TwitchChatDownloader
                 public string Email { get; set; }
             }
         }
-
     }
 }

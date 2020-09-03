@@ -67,22 +67,27 @@ namespace TwitchChatDownloader
 
         static async Task RunApp(string settings, string? video, string? channel, int? first)
         {
-            //Console.CursorVisible = false;
+            try {
+                //Console.CursorVisible = false;
 
-            App app = new();
-            await app.Init(settings);
+                App app = new();
+                await app.Init(settings);
 
-            Stopwatch sw = new();
-            sw.Start();
+                Stopwatch sw = new();
+                sw.Start();
 
-            if (video is not null)
-                await app.DownloadChatLogs(video);
-            else if (channel is not null)
-                await app.DownloadChatLogs(channel.Split(','), first);
+                if (video is not null)
+                    await app.DownloadChatLogsAsync(video);
+                else if (channel is not null)
+                    await app.DownloadChatLogsAsync(channel.Split(','), first);
 
-            sw.Stop();
-            Console.WriteLine($"\nDone. Time: {sw.Elapsed}");
-            //Console.CursorVisible = true;
+                sw.Stop();
+                Console.WriteLine($"\nDone. Time: {sw.Elapsed}");
+                //Console.CursorVisible = true;
+            }
+            catch (Exception e) {
+                Console.WriteLine($"\tERROR!\n{e.Message}");
+            }
         }
     }
 }

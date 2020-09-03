@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
-using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
@@ -10,24 +9,21 @@ namespace TwitchChatDownloader
 {
     static class TwitchComment
     {
-        public static async Task GetComments(long videoID, string outputPath, ConsoleProgressBar progressBar, BlockingCollection<Tuple<StreamWriter, TwitchComment.JsonComments>> commentsPipe)
+        public static async Task GetCommentsAsync(long videoID, string outputPath, ConsoleProgressBar progressBar,
+            BlockingCollection<Tuple<StreamWriter, TwitchComment.JsonComments>> commentsPipe)
         {
-            //string targetUri = $"https://api.twitch.tv/v5/videos/{videoID}/comments";
-
-            string? nextCursor;
-            string video = $"{videoID}/comments";
-            string query = "";
+            string? nextCursor = null;
+            string video = $"{videoID}/comments?cursor=";
 
             StreamWriter sw = new(outputPath);
 
             do {
-                string requestUri = video + query;
+                string query = video + nextCursor;
 
                 //Stopwatch stw = new();
                 //stw.Start();
 
-                var responseComments = await TwitchClient.SendAsync(TwitchClient.RequestType.Comment, requestUri);
-                var jsonComments = await responseComments.Content.ReadFromJsonAsync<JsonComments>();
+                var jsonComments = await TwitchClient.GetJsonAsync<JsonComments>(TwitchClient.RequestType.Comment, query);
 
                 //stw.Stop();
                 //Console.WriteLine($"Done. Time: {stw.Elapsed}");
@@ -35,7 +31,6 @@ namespace TwitchChatDownloader
                 commentsPipe.Add(new Tuple<StreamWriter, JsonComments>(sw, jsonComments));
 
                 nextCursor = jsonComments.Next;
-                query = $"?cursor={nextCursor}";
 
                 int offset = Convert.ToInt32(jsonComments.Comments[^1].ContentOffsetSeconds);
                 progressBar.Report(videoID, offset);
@@ -43,20 +38,6 @@ namespace TwitchChatDownloader
 
             progressBar.Report(videoID, -1);
         }
-
-        //private void WriteComments()
-        //{
-        //    foreach (var part in _commentsPipe.GetConsumingEnumerable()) {
-        //        var sw = part.Item1;
-        //        var jc = part.Item2;
-        //        foreach (var comment in jc.Comments) {
-        //            sw.WriteLine($"{comment.ContentOffsetSeconds}\t{comment.Commenter.Name}: {comment.Message.Body}");
-        //        }
-
-        //        if (jc.Next is null)
-        //            sw.Close();
-        //    }
-        //}
 
         //public class CommentInfo
         //{

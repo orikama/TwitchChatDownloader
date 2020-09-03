@@ -21,23 +21,23 @@ namespace TwitchChatDownloader
             }
         }
 
-        public async Task DownloadChatLogs(string[] userNames, int? firstVideos)
+        public async Task DownloadChatLogsAsync(string[] userNames, int? firstVideos)
         {
-            var users = await TwitchUser.GetUsersByNames(userNames);
+            var users = await TwitchUser.GetUsersByNamesAsync(userNames);
             var videos = await TwitchVideo.GetVideosByUserIDs(users.UserID, firstVideos);
 
-            await GetMessagesFromVideos(videos);
+            await GetMessagesFromVideosAsync(videos);
         }
 
-        public async Task DownloadChatLogs(string videoIDs)
+        public async Task DownloadChatLogsAsync(string videoIDs)
         {
             var videos = await TwitchVideo.GetVideosByVideoIDs(videoIDs);
 
-            await GetMessagesFromVideos(videos);
+            await GetMessagesFromVideosAsync(videos);
         }
 
 
-        private async Task GetMessagesFromVideos(List<TwitchVideo.VideoInfo> videos)
+        private async Task GetMessagesFromVideosAsync(List<TwitchVideo.VideoInfo> videos)
         {
             List<Task> tasks = new(AppSettings.MaxConcurrentDownloads);
             string[] fileNames = new string[videos.Count];
@@ -56,7 +56,7 @@ namespace TwitchChatDownloader
 
                 for (int i = 0; i < videos.Count; ++i) {
                     var index = i;
-                    tasks.Add(Task.Run(() => TwitchComment.GetComments(
+                    tasks.Add(Task.Run(() => TwitchComment.GetCommentsAsync(
                         videos[index].VideoID, $@"{AppSettings.OutputPath}/{fileNames[index]}.txt", progressBar, _commentsPipe)));
 
                     // FIXME:
@@ -73,6 +73,7 @@ namespace TwitchChatDownloader
 
             commentsProcessor.Wait();
         }
+
 
         private void WriteComments()
         {

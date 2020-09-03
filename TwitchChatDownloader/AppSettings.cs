@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -16,6 +15,7 @@ namespace TwitchChatDownloader
         public static int MaxConcurrentDownloads => _jsonAppSettings.MaxConcurrentDownloads;
         public static string OutputPath => _jsonAppSettings.OutputPath;
 
+
         private static JsonAppSettings _jsonAppSettings;
         private static string _settingsPath;
 
@@ -28,11 +28,11 @@ namespace TwitchChatDownloader
             _jsonAppSettings = JsonSerializer.Deserialize<JsonAppSettings>(jsonString);
 
             if (_jsonAppSettings.ClientID.Length == 0 || _jsonAppSettings.ClientSecret.Length == 0) {
-                throw new ArgumentException($"ClientID or ClientSecret were empty in {settingsPath}");
+                throw new ArgumentException($"You must specify ClientID and ClientSecret in your: {settingsPath}");
             }
 
             if (_jsonAppSettings.OAuthToken.Length == 0 || await IsTokenValid() == false) {
-                _jsonAppSettings.OAuthToken = await GetNewOAuthToken();
+                _jsonAppSettings.OAuthToken = await GetNewOAuthTokenAsync();
             }
         }
 
@@ -45,21 +45,17 @@ namespace TwitchChatDownloader
 
         private static async Task<bool> IsTokenValid()
         {
-            var responseOAuthValidation = await TwitchClient.SendAsync(TwitchClient.RequestType.OAuthValidate);
-            var jsonOAuthValidtaion = await responseOAuthValidation.Content.ReadFromJsonAsync<JsonAppOAuthTokenValidate>();
+            var responseOAuthValidation = await TwitchClient.GetAsync(TwitchClient.RequestType.Comment);
 
-            Console.WriteLine($"OAuth token expires in {jsonOAuthValidtaion.ExpiresIn}s");
+            //Console.WriteLine($"OAuth token expires in {jsonOAuthValidtaion.ExpiresIn}s");
 
             return responseOAuthValidation.IsSuccessStatusCode;
         }
 
         // TODO: Not tested
-        private static async Task<string> GetNewOAuthToken()
+        private static async Task<string> GetNewOAuthTokenAsync()
         {
-            //string uriGetOAuthToken = $"token?client_id={clientID}&client_secret={clientSecret}&grant_type=client_credentials";
-
-            var responseOAuthToken = await TwitchClient.SendAsync(TwitchClient.RequestType.OAuthGetNew);
-            var jsonAppOAuthToken = await responseOAuthToken.Content.ReadFromJsonAsync<JsonAppOAuthTokenResponse>();
+            var jsonAppOAuthToken = await TwitchClient.GetJsonAsync<JsonAppOAuthTokenResponse>(TwitchClient.RequestType.OAuthGetNew);
 
             return jsonAppOAuthToken.OAuthToken;
         }

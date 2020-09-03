@@ -1,5 +1,6 @@
 ﻿using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Threading.Tasks;
 
 
@@ -27,7 +28,24 @@ namespace TwitchChatDownloader
         }
 
 
-        public static async Task<HttpResponseMessage> SendAsync(RequestType type, string query = "")
+        public static async Task<HttpResponseMessage> GetAsync(RequestType type, string query = "")
+        {
+            var httpRequest = MakeHttpRequest(type, query);
+            var response = await s_httpClient.SendAsync(httpRequest);
+
+            return response;
+        }
+
+        public static async Task<T> GetJsonAsync<T>(RequestType type, string query = "") where T : class
+        {
+            var response = await GetAsync(type, query);
+            var jsonResponse = await response.Content.ReadFromJsonAsync<T>();
+
+            return jsonResponse;
+        }
+
+
+        private static HttpRequestMessage MakeHttpRequest(RequestType type, string query = "")
         {
             HttpRequestMessage httpRequest;
 
@@ -60,7 +78,7 @@ namespace TwitchChatDownloader
                     break;
             }
 
-            return await s_httpClient.SendAsync(httpRequest);
+            return httpRequest;
         }
     }
 }
