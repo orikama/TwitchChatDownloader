@@ -71,9 +71,7 @@ namespace TwitchChatDownloader
                 //Console.CursorVisible = false;
 
                 App app = new();
-                // TODO: I need to fix this mess with AppSettings
-                await app.Init(settings);
-                await AppSettings.SaveAsync();
+                await app.InitAsync(settings);
 
                 Stopwatch sw = new();
                 sw.Start();

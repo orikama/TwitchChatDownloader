@@ -8,6 +8,7 @@ namespace TwitchChatDownloader
 {
     static class TwitchClient
     {
+        // NOTE: I can't use HttpClient.BaseAddress because of this OAuth stuff
         private const string kBaseUriOAuth = "https://id.twitch.tv/oauth2/";
         private const string kBaseUriUsers = "https://api.twitch.tv/helix/users?";
         private const string kBaseUriVideos = "https://api.twitch.tv/helix/videos?";

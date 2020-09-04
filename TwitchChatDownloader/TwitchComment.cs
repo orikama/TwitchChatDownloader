@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace TwitchChatDownloader
 {
-    static class TwitchComment
+    public static class TwitchComment
     {
         public static async Task GetCommentsAsync(long videoID, string outputPath, ConsoleProgressBar progressBar,
             BlockingCollection<Tuple<StreamWriter, TwitchComment.JsonComments>> commentsPipe)
@@ -40,13 +40,6 @@ namespace TwitchChatDownloader
             progressBar.Report(videoID, -1);
         }
 
-        //public class CommentInfo
-        //{
-        //    public string CommenterName;
-        //    public string Message;
-        //    public double OffsetSeconds;
-        //}
-
 
         public class JsonComments
         {
@@ -60,7 +53,7 @@ namespace TwitchChatDownloader
             public class JsonComment
             {
                 [JsonPropertyName("_id")]
-                public string ID { get; set; }
+                public string CommentID { get; set; }
                 [JsonPropertyName("created_at")]
                 public DateTime CreatedAt { get; set; }
                 [JsonPropertyName("updated_at")]

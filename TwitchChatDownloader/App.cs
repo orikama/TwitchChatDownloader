@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.CodeAnalysis.CSharp.Scripting;
+using Microsoft.CodeAnalysis.Scripting;
 
 
 namespace TwitchChatDownloader
@@ -10,15 +12,18 @@ namespace TwitchChatDownloader
     class App
     {
         private static readonly BlockingCollection<Tuple<StreamWriter, TwitchComment.JsonComments>> _commentsPipe = new(100);
+        private static Func<TwitchComment.JsonComments.JsonComment, string> CommentFormatter;
 
 
-        public async Task Init(string settingsPath)
+        public async Task InitAsync(string settingsPath)
         {
             await AppSettings.LoadAsync(settingsPath);
 
             if (Directory.Exists(AppSettings.OutputPath) == false) {
                 Directory.CreateDirectory(AppSettings.OutputPath);
             }
+
+            CommentFormatter = await BuildLambdaAsync(AppSettings.CommentFormat);
         }
 
         public async Task DownloadChatLogsAsync(string[] userNames, int? firstVideos)
@@ -77,13 +82,22 @@ namespace TwitchChatDownloader
         {
             foreach (var (streamWriter, jsonComments) in _commentsPipe.GetConsumingEnumerable()) {
                 foreach (var comment in jsonComments.Comments) {
-                    streamWriter.WriteLine($"{comment.ContentOffsetSeconds}\t{comment.Commenter.Name}: {comment.Message.Body}");
+                    streamWriter.WriteLine(CommentFormatter(comment));
                 }
 
                 if (jsonComments.Next is null) {
                     streamWriter.Close();
                 }
             }
+        }
+
+        private async Task<Func<TwitchComment.JsonComments.JsonComment, string>> BuildLambdaAsync(string format)
+        {
+            var lambdaFormat = $"comment => $\"{format}\"";
+            var options = ScriptOptions.Default.AddReferences(typeof(TwitchComment.JsonComments.JsonComment).Assembly);
+            var lambda = await CSharpScript.EvaluateAsync<Func<TwitchComment.JsonComments.JsonComment, string>>(lambdaFormat, options);
+
+            return lambda;
         }
     }
 }

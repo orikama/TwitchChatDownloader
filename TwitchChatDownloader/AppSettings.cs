@@ -14,6 +14,7 @@ namespace TwitchChatDownloader
         public static string OAuthToken => _jsonAppSettings.OAuthToken;
         public static int MaxConcurrentDownloads => _jsonAppSettings.MaxConcurrentDownloads;
         public static string OutputPath => _jsonAppSettings.OutputPath;
+        public static string CommentFormat => _jsonAppSettings.CommentFormat;
 
 
         private static JsonAppSettings _jsonAppSettings;
@@ -31,11 +32,17 @@ namespace TwitchChatDownloader
                 throw new ArgumentException($"You must specify ClientID and ClientSecret in your: {settingsPath}");
             }
 
+            if (_jsonAppSettings.CommentFormat.Length == 0) {
+                throw new ArgumentException($"You must specify CommentFormat in your: {settingsPath}");
+            }
+
             if (_jsonAppSettings.OAuthToken.Length == 0 || await ValidateTokenAsync() == false) {
                 _jsonAppSettings.OAuthToken = await GetNewOAuthTokenAsync();
+                await SaveAsync();
             }
         }
 
+        // NOTE: I don't think there is a need to do it async
         public static async Task SaveAsync()
         {
             using FileStream fs = new FileStream(_settingsPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, true);
@@ -68,6 +75,7 @@ namespace TwitchChatDownloader
             public string OAuthToken { get; set; }
             public int MaxConcurrentDownloads { get; set; }
             public string OutputPath { get; set; }
+            public string CommentFormat { get; set; }
         }
 
         // https://dev.twitch.tv/docs/authentication/getting-tokens-oauth#oauth-client-credentials-flow
