@@ -1,7 +1,8 @@
 {
-    "ClientID": "",
-    "ClientSecret": "",
-    "OAuthToken": "",
-    "MaxConcurrentDownloads": 4,
-    "OutputPath": "./logs_out/"
+  "ClientID": "",
+  "ClientSecret": "",
+  "OAuthToken": "",
+  "MaxConcurrentDownloads": 4,
+  "OutputPath": "./outLogs/",
+  "CommentFormat": "{comment.Commenter.Name.PadRight(30)}{comment.Message.Body}"
 }
