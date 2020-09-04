@@ -47,7 +47,7 @@ namespace TwitchChatDownloader
             List<Task> tasks = new(AppSettings.MaxConcurrentDownloads);
             string[] fileNames = new string[videos.Count];
 
-            Console.WriteLine($"\nGetting {videos.Count} video(s)\n");
+            Console.WriteLine($"\nGetting {videos.Count} video(s) chat logs\n");
 
             var commentsProcessor = Task.Run(WriteComments);
 
@@ -75,6 +75,8 @@ namespace TwitchChatDownloader
             }
 
             commentsProcessor.Wait();
+
+            Console.Write("Done.");
         }
 
 
@@ -93,9 +95,13 @@ namespace TwitchChatDownloader
 
         private async Task<Func<TwitchComment.JsonComments.JsonComment, string>> BuildLambdaAsync(string format)
         {
+            Console.Write("Compiling 'CommentFormat' string");
+
             var lambdaFormat = $"comment => $\"{format}\"";
             var options = ScriptOptions.Default.AddReferences(typeof(TwitchComment.JsonComments.JsonComment).Assembly);
             var lambda = await CSharpScript.EvaluateAsync<Func<TwitchComment.JsonComments.JsonComment, string>>(lambdaFormat, options);
+
+            Console.WriteLine(" Done.");
 
             return lambda;
         }

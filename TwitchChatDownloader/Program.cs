@@ -82,12 +82,12 @@ namespace TwitchChatDownloader
                     await app.DownloadChatLogsAsync(channel.Split(','), first);
 
                 sw.Stop();
-                Console.WriteLine($"\nDone. Time: {sw.Elapsed}");
+                Console.WriteLine($" Time: {sw.Elapsed}");
 
                 //Console.CursorVisible = true;
             }
             catch (Exception e) {
-                Console.WriteLine($"\tERROR!\n{e.Message}");
+                Console.WriteLine($"\n\tERROR!!!\n{e.Message}");
             }
         }
     }

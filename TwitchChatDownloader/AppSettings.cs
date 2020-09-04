@@ -23,23 +23,33 @@ namespace TwitchChatDownloader
 
         public static async Task LoadAsync(string settingsPath)
         {
+            Console.Write("Loading settings and verifying (or getting new) OAuth token");
+
             _settingsPath = settingsPath;
 
             var jsonString = File.ReadAllText(settingsPath);
             _jsonAppSettings = JsonSerializer.Deserialize<JsonAppSettings>(jsonString);
 
+            // Validate ClientID and ClientSecret
             if (_jsonAppSettings.ClientID.Length == 0 || _jsonAppSettings.ClientSecret.Length == 0) {
                 throw new ArgumentException($"You must specify ClientID and ClientSecret in your: {settingsPath}");
             }
-
-            if (_jsonAppSettings.CommentFormat.Length == 0) {
-                throw new ArgumentException($"You must specify CommentFormat in your: {settingsPath}");
-            }
-
+            // Validate or get new OAuthToken
             if (_jsonAppSettings.OAuthToken.Length == 0 || await ValidateTokenAsync() == false) {
                 _jsonAppSettings.OAuthToken = await GetNewOAuthTokenAsync();
                 await SaveAsync();
             }
+            // Validate MaxConcurrentDownloads
+            if (_jsonAppSettings.MaxConcurrentDownloads <= 0) {
+                _jsonAppSettings.MaxConcurrentDownloads = 1;
+                Console.WriteLine("WARNING! MaxConcurrentDownloads was <= 0, using MaxConcurrentDownloads=1");
+            }
+            // Validate CommentFormat
+            if (_jsonAppSettings.CommentFormat.Length == 0) {
+                throw new ArgumentException($"You must specify CommentFormat in your: {settingsPath}");
+            }
+
+            Console.WriteLine(" Done.");
         }
 
         // NOTE: I don't think there is a need to do it async
