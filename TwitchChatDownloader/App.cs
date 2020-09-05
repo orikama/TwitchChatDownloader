@@ -56,13 +56,14 @@ namespace TwitchChatDownloader
                 for (int i = 0; i < videos.Count; ++i) {
                     var v = videos[i];
                     fileNames[i] = $"{v.StreamerName}_{v.VideoID}";
-                    progressBar.Add(v.VideoID, fileNames[i], v.DurationSeconds);
+                    progressBar.Add(v.VideoID, fileNames[i], v.Duration, v.DurationSeconds);
                 }
 
                 for (int i = 0; i < videos.Count; ++i) {
-                    int index = i;
+                    int index = i; // capture
                     tasks.Add(Task.Run(() => TwitchComment.GetCommentsAsync(
-                        videos[index].VideoID, $@"{AppSettings.OutputPath}/{fileNames[index]}.txt", progressBar, _commentsPipe)));
+                        videos[index].VideoID, $@"{AppSettings.OutputPath}/{fileNames[index]}.txt", progressBar, _commentsPipe))
+                    );
 
                     if (i + 1 < videos.Count && tasks.Count == AppSettings.MaxConcurrentDownloads) {
                         var t = await Task.WhenAny(tasks);

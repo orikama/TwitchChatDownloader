@@ -1,8 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 
@@ -13,20 +12,37 @@ namespace TwitchChatDownloader
         public static async Task<List<VideoInfo>> GetVideosByUserIDs(string[] userIDs, int? firstVideos)
         {
             List<VideoInfo> videos = new(userIDs.Length);
-
-            string first = firstVideos.HasValue ? $"first={firstVideos}&" : string.Empty;
-            string query = $"{first}user_id=";
+            int amountOfVideosForUser = firstVideos ?? 20;
 
             foreach (var userID in userIDs) {
-                var jsonVideos = (await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, $"{query}{userID}"))!.Videos;
 
-                GetVideos(videos, jsonVideos);
+                int videosLeft = amountOfVideosForUser;
+                int first = Math.Min(videosLeft, 100);
+                string userQ = $"user_id={userID}";
+                string afterQ = string.Empty;
+                string? cursor;
+
+                do {
+                    string firstQ = $"&first={first}";
+                    string query = $"{userQ}{firstQ}{afterQ}";
+
+                    var jsonVideos = await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, query);
+                    GetVideos(videos, jsonVideos.Videos);
+
+                    videosLeft -= jsonVideos.Videos.Length;
+                    first = Math.Min(videosLeft, 100);
+                    cursor = jsonVideos.Pagination.Cursor;
+                    afterQ = $"&after={cursor}";
+                } while (cursor != null && first > 0);
             }
 
             videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
             return videos;
         }
 
+
+        // TODO: I need to fix thi method the same way I fixed GetVideosByUserIDs(), but I'm lazy.
+        //  Right now it can get only ~50-60 videos
         public static async Task<List<VideoInfo>> GetVideosByVideoIDs(string videoIDs)
         {
             // NOTE: I can use videoIDs.Count(c => c == ',') to get list capacity, but is it worth it?
@@ -46,21 +62,36 @@ namespace TwitchChatDownloader
         {
             // NOTE: LINQ?
             foreach (var jsonVideo in jsonVideos) {
-                videos.Add(new VideoInfo
-                {
-                    StreamerName = jsonVideo.UserName,
-                    DurationSeconds = jsonVideo.Duration,
-                    VideoID = long.Parse(jsonVideo.VideoID)
-                });
+                videos.Add(new VideoInfo(jsonVideo.UserName, jsonVideo.Duration, jsonVideo.VideoID));
             }
         }
 
 
         public class VideoInfo
         {
-            public string StreamerName;
-            public string DurationSeconds;
-            public long VideoID;
+            public readonly string StreamerName;
+            public readonly string Duration;
+            public readonly int DurationSeconds;
+            public readonly long VideoID;
+
+            public VideoInfo(string streamerName, string duration, string videoID)
+            {
+                StreamerName = streamerName;
+                Duration = duration;
+                DurationSeconds = StringDurationToSeconds(duration);
+                VideoID = long.Parse(videoID);
+            }
+
+            private static readonly Regex s_durationRegex = new(@"((?<h>\d+)h)?((?<m>\d+)m)?((?<s>\d+)s)", RegexOptions.Compiled);
+            private static int StringDurationToSeconds(string duration)
+            {
+                var matches = s_durationRegex.Match(duration);
+                int.TryParse(matches.Groups["h"].Value, out int h);
+                int.TryParse(matches.Groups["m"].Value, out int m);
+                int.TryParse(matches.Groups["s"].Value, out int s);
+
+                return (h * 60 + m) * 60 + s;
+            }
         }
 
         // NOTE: Add to this Json classes 'data' keyword with C# 9 ?
@@ -74,7 +105,7 @@ namespace TwitchChatDownloader
             public class JsonVideosPagination
             {
                 [JsonPropertyName("cursor")]
-                public string Cursor { get; set; }
+                public string? Cursor { get; set; }
             }
 
             public class JsonVideo

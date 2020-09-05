@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Globalization;
 using System.Threading;
 
 
@@ -16,30 +15,25 @@ namespace TwitchChatDownloader
     {
         private const int kBlockCount = 20;
         private const int kFileNamePadding = 35;
-        private const int kDisplayDurationPadding = 10;
+        private const int kDisplayDurationPadding = 20;
 
         private readonly TimeSpan _animationInterval = TimeSpan.FromSeconds(1.0);
         private readonly Timer _timer;
         private bool _disposed = false;
 
-        private static readonly string[] s_timeSpanParseFormats = { @"%h\h%m\m%s\s", @"%m\m%s\s", @"%s\s" };
 
         private class DownloadProgress
         {
-            public int CurrentOffset = default;
-            public readonly int VideoDuration;
             public readonly string FileName;
             public readonly string DisplayDuration;
+            public readonly int DurationSeconds;
+            public int CurrentOffset = default;
 
-            public DownloadProgress(string fileName, string duration)
+            public DownloadProgress(string fileName, string duration, int durationSeconds)
             {
-                // TODO: Test with different values
-                var durationSeconds = TimeSpan.ParseExact(duration, s_timeSpanParseFormats, CultureInfo.InvariantCulture);
-                //Console.WriteLine($"Dur: {duration}\tts: {durationSeconds.TotalSeconds}");
-
                 FileName = fileName.PadRight(kFileNamePadding);
-                DisplayDuration = duration.PadRight(kDisplayDurationPadding);
-                VideoDuration = Convert.ToInt32(durationSeconds.TotalSeconds);
+                DisplayDuration = $"{duration} {durationSeconds}s".PadRight(kDisplayDurationPadding);
+                DurationSeconds = durationSeconds;
             }
         }
         private readonly Dictionary<long, DownloadProgress> _downloads;
@@ -59,14 +53,14 @@ namespace TwitchChatDownloader
             }
         }
 
-        public void Add(long videoID, string fileName, string duration)
+        public void Add(long videoID, string fileName, string duration, int durationSeconds)
         {
-            _downloads.Add(videoID, new DownloadProgress(fileName, duration));
+            _downloads.Add(videoID, new DownloadProgress(fileName, duration, durationSeconds));
         }
 
         public void Report(long videoID, int value)
         {
-            value = Math.Min(value, _downloads[videoID].VideoDuration);
+            value = Math.Min(value, _downloads[videoID].DurationSeconds);
             Interlocked.Exchange(ref _downloads[videoID].CurrentOffset, value);
         }
 
@@ -103,10 +97,10 @@ namespace TwitchChatDownloader
             foreach (var video in _downloads.Values) {
                 if (video.CurrentOffset != 0) {
                     Console.Write(video.FileName);
-                    if (video.CurrentOffset == video.VideoDuration) {
+                    if (video.CurrentOffset == video.DurationSeconds) {
                         Console.WriteLine(" Downloading comments that were posted after the VOD finished");
                     } else {
-                        double percent = (double)video.CurrentOffset / video.VideoDuration;
+                        double percent = (double)video.CurrentOffset / video.DurationSeconds;
                         int progressBlockCount = (int)(percent * kBlockCount);
 
                         string s = new string('=', progressBlockCount) + ">";
