@@ -62,19 +62,16 @@ namespace TwitchChatDownloader
 
         private static async Task<bool> ValidateTokenAsync()
         {
-            var responseOAuthValidation = await TwitchClient.GetAsync(TwitchClient.RequestType.Comment);
+            var jsonAppOAuthTokenValidate = await TwitchClient.GetJsonAsync<JsonAppOAuthTokenValidate>(TwitchClient.RequestType.OAuthValidate);
 
-            //Console.WriteLine($"OAuth token expires in {jsonOAuthValidtaion.ExpiresIn}s");
-
-            return responseOAuthValidation.IsSuccessStatusCode;
+            return jsonAppOAuthTokenValidate is not null;
         }
 
-        // TODO: Not tested
         private static async Task<string> GetNewOAuthTokenAsync()
         {
             var jsonAppOAuthToken = await TwitchClient.GetJsonAsync<JsonAppOAuthTokenResponse>(TwitchClient.RequestType.OAuthGetNew);
 
-            return jsonAppOAuthToken.OAuthToken;
+            return jsonAppOAuthToken!.OAuthToken;
         }
 
 

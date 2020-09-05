@@ -18,7 +18,7 @@ namespace TwitchChatDownloader
             string query = $"{first}user_id=";
 
             foreach (var userID in userIDs) {
-                var jsonVideos = (await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, $"{query}{userID}")).Videos;
+                var jsonVideos = (await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, $"{query}{userID}"))!.Videos;
 
                 GetVideos(videos, jsonVideos);
             }
@@ -33,7 +33,7 @@ namespace TwitchChatDownloader
             List<VideoInfo> videos = new();
             string query = $"id={videoIDs}";
 
-            var jsonVideos = (await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, query)).Videos;
+            var jsonVideos = (await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, query))!.Videos;
 
             GetVideos(videos, jsonVideos);
 
