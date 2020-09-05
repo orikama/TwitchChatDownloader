@@ -15,7 +15,7 @@ namespace TwitchChatDownloader
     {
         private const int kBlockCount = 20;
         private const int kFileNamePadding = 35;
-        private const int kDisplayDurationPadding = 20;
+        private const int kDisplayDurationPadding = 10;
 
         private readonly TimeSpan _animationInterval = TimeSpan.FromSeconds(1.0);
         private readonly Timer _timer;
@@ -32,7 +32,7 @@ namespace TwitchChatDownloader
             public DownloadProgress(string fileName, string duration, int durationSeconds)
             {
                 FileName = fileName.PadRight(kFileNamePadding);
-                DisplayDuration = $"{duration} {durationSeconds}s".PadRight(kDisplayDurationPadding);
+                DisplayDuration = duration.PadRight(kDisplayDurationPadding);
                 DurationSeconds = durationSeconds;
             }
         }
