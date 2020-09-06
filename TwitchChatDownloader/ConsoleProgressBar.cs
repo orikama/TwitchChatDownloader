@@ -39,7 +39,7 @@ namespace TwitchChatDownloader
         private readonly Dictionary<long, DownloadProgress> _downloads;
         private int _currentDownloads = 0;
 
-        private int _isDisconnected = 0;
+        private bool _isDisconnected = false;
 
 
         public ConsoleProgressBar(int maxConcurrentDownloads)
@@ -64,12 +64,18 @@ namespace TwitchChatDownloader
         {
             value = Math.Min(value, _downloads[videoID].DurationSeconds);
             Interlocked.Exchange(ref _downloads[videoID].CurrentOffset, value);
+            // NOTE: And now I need call this every time? Even when 99.99% of the time _isDisconnected will be = 0
+            //  Good one. And probably I can just write _isDisconnected = 0;
+            //Interlocked.CompareExchange(ref _isDisconnected, 0, 1);
+            // NOTE: Fuck atomic, it should work.
+            _isDisconnected = false;
         }
 
         public void ReportDisconnect()
         {
             // NOTE: Should this be atomic at all?
-            Interlocked.CompareExchange(ref _isDisconnected, 1, 0);
+            //Interlocked.CompareExchange(ref _isDisconnected, 1, 0);
+            _isDisconnected = true;
         }
 
         private void TimerHandler(object _)
@@ -131,7 +137,7 @@ namespace TwitchChatDownloader
             int currentLineCursor = Console.CursorTop;
             Console.SetCursorPosition(0, Console.WindowTop + Console.WindowHeight - 1);
 
-            if (_isDisconnected != 0) {
+            if (_isDisconnected) {
                 Console.Write("Lost Internet connection. Reconecting ...");
             }
 
