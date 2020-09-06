@@ -39,6 +39,8 @@ namespace TwitchChatDownloader
         private readonly Dictionary<long, DownloadProgress> _downloads;
         private int _currentDownloads = 0;
 
+        private int _isDisconnected = 0;
+
 
         public ConsoleProgressBar(int maxConcurrentDownloads)
         {
@@ -64,6 +66,12 @@ namespace TwitchChatDownloader
             Interlocked.Exchange(ref _downloads[videoID].CurrentOffset, value);
         }
 
+        public void ReportDisconnect()
+        {
+            // NOTE: Should this be atomic at all?
+            Interlocked.CompareExchange(ref _isDisconnected, 1, 0);
+        }
+
         private void TimerHandler(object _)
         {
             lock (_timer) {
@@ -71,14 +79,19 @@ namespace TwitchChatDownloader
 
                 ClearPreviousOutput(_currentDownloads);
                 PrintProgress();
+                PrintStatusBar();
             }
         }
 
         private void ClearPreviousOutput(int lines)
         {
             int currentLineCursor = Console.CursorTop - lines;
+            // Clear progress output
             Console.SetCursorPosition(0, currentLineCursor);
             Console.Write(new string(' ', Console.WindowWidth * lines));
+            // Clear status bar
+            Console.SetCursorPosition(0, Console.WindowTop + Console.WindowHeight - 1);
+            Console.Write(new string(' ', Console.BufferWidth));
             Console.SetCursorPosition(0, currentLineCursor);
         }
 
@@ -111,6 +124,18 @@ namespace TwitchChatDownloader
                     ++_currentDownloads;
                 }
             }
+        }
+
+        private void PrintStatusBar()
+        {
+            int currentLineCursor = Console.CursorTop;
+            Console.SetCursorPosition(0, Console.WindowTop + Console.WindowHeight - 1);
+
+            if (_isDisconnected != 0) {
+                Console.Write("Lost Internet connection. Reconecting ...");
+            }
+
+            Console.SetCursorPosition(0, currentLineCursor);
         }
 
         private void ResetTimer()

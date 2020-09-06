@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.IO;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -19,22 +18,26 @@ namespace TwitchChatDownloader
             StreamWriter sw = new(outputPath);
 
             do {
-                string query = video + nextCursor;
+                try {
+                    string query = video + nextCursor;
 
-                //Stopwatch stw = new();
-                //stw.Start();
+                    //Stopwatch stw = new();
+                    //stw.Start();
 
-                var jsonComments = await TwitchClient.GetJsonAsync<JsonComments>(TwitchClient.RequestType.Comment, query);
+                    var jsonComments = await TwitchClient.GetJsonAsync<JsonComments>(TwitchClient.RequestType.Comment, query);
 
-                //stw.Stop();
-                //Console.WriteLine($"Done. Time: {stw.Elapsed}");
+                    //stw.Stop();
+                    //Console.WriteLine($"Done. Time: {stw.Elapsed}");
 
-                commentsPipe.Add(new Tuple<StreamWriter, JsonComments>(sw, jsonComments));
+                    commentsPipe.Add(new Tuple<StreamWriter, JsonComments>(sw, jsonComments));
 
-                nextCursor = jsonComments.Next;
-
-                int offset = Convert.ToInt32(jsonComments.Comments[^1].ContentOffsetSeconds);
-                progressBar.Report(videoID, offset);
+                    nextCursor = jsonComments.Next;
+                    int offset = Convert.ToInt32(jsonComments.Comments[^1].ContentOffsetSeconds);
+                    progressBar.Report(videoID, offset);
+                }
+                catch (TaskCanceledException e) {
+                    progressBar.ReportDisconnect();
+                }
             } while (nextCursor is not null);
 
             progressBar.Report(videoID, -1);
