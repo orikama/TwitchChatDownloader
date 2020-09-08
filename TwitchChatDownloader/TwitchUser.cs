@@ -1,43 +1,37 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 
 namespace TwitchChatDownloader
 {
-    static class TwitchUser
+    public class TwitchUser
     {
-        public static async Task<UserInfos> GetUsersByNamesAsync(string[] userNames)
+        public static async Task<List<UserInfo>> GetUsersByNamesAsync(string[] userNames)
         {
-            UserInfos users = new(userNames.Length);
-
             var logins = string.Join("&login=", userNames);
             var query = $"login={logins}";
 
             var jsonUsers = (await TwitchClient.GetJsonAsync<JsonUsersResponse>(TwitchClient.RequestType.User, query)).Users;
 
-            // NOTE: Use LINQ?
-            //  or WithIndex() extension https://thomaslevesque.com/2019/11/18/using-foreach-with-index-in-c/
-            // NOTE: Main reason for using SOA was that I need UserIDs array later, although its probably a bad decision
-            for (int i = 0; i < jsonUsers.Length; ++i) {
-                users.UserID[i] = jsonUsers[i].UserID;
-                users.DisplayName[i] = jsonUsers[i].DisplayName;
-            }
+            List<UserInfo> users = new(userNames.Length);
+            users.AddRange(jsonUsers.Select(jsonUser => new UserInfo(jsonUser.UserID, jsonUser.DisplayName)));
 
             return users;
         }
 
 
-        public class UserInfos
+        public class UserInfo
         {
-            // TODO: naming
-            public readonly string[] UserID;
-            public readonly string[] DisplayName;
+            public readonly string UserID;
+            public readonly string DisplayName;
 
-            public UserInfos(int size)
+            public UserInfo(string userID, string displayName)
             {
-                UserID = new string[size];
-                DisplayName = new string[size];
+                UserID = userID;
+                DisplayName = displayName;
             }
         }
 
@@ -46,6 +40,7 @@ namespace TwitchChatDownloader
         {
             [JsonPropertyName("data")]
             public JsonUser[] Users { get; set; }
+
 
             public class JsonUser
             {

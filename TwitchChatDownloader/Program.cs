@@ -37,6 +37,7 @@ namespace TwitchChatDownloader
                     description: "Get <first> videos from <channel>(s). Must be <= 100. Gets 20 for every <channel> if not specified (twitch default)"
                 )
             };
+
             rootCommand.AddValidator(commandResult =>
             {
                 bool containsVideo = commandResult.Children.Contains("video");
@@ -50,9 +51,16 @@ namespace TwitchChatDownloader
                     return "Options '--video' and ('--channel' or '--first') cannot be used together.";
                 }
 
+                if (containsFirst) {
+                    var firstValue = commandResult.ValueForOption<int>("first");
+                    if(firstValue < 1) {
+                        return "'--first' value must be > 0";
+                    }
+                }
+
                 if (containsVideo) {
                     var videoValue = commandResult.ValueForOption<string>("video");
-                    if (videoValue!.Split(',').Length > 100)
+                    if (videoValue.Split(',').Length > 100)
                         return "No more than 100 Video IDs must be specified for --video option";
                 }
 
@@ -67,10 +75,12 @@ namespace TwitchChatDownloader
 
         static async Task RunApp(string settings, string? video, string? channel, int? first)
         {
-            try {
-                //Console.CursorVisible = false;
+            //Console.CursorVisible = false;
 
-                App app = new();
+            App app = new();
+            Console.CancelKeyPress += (sender, e) => ConsoleCancelHandler(sender, e, app);
+
+            try {
                 await app.InitAsync(settings);
 
                 Stopwatch sw = new();
@@ -82,13 +92,19 @@ namespace TwitchChatDownloader
                     await app.DownloadChatLogsAsync(channel.Split(','), first);
 
                 sw.Stop();
-                Console.WriteLine($" Time: {sw.Elapsed}");
-
-                //Console.CursorVisible = true;
+                Console.WriteLine($"\nTime: {sw.Elapsed}");
             }
             catch (Exception e) {
-                Console.WriteLine($"\n\tERROR!!!\n{e.Message}");
+                Console.WriteLine($"\n\tERROR!!!\n{e.Message}\n{e.StackTrace}");
             }
+
+            //Console.CursorVisible = true;
+        }
+
+        static void ConsoleCancelHandler(object? _, ConsoleCancelEventArgs args, App app)
+        {
+            app.Stop();
+            args.Cancel = true; // Prevent process from terminating
         }
     }
 }

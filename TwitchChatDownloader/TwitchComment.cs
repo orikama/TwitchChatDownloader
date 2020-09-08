@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.IO;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 
 
@@ -9,18 +10,25 @@ namespace TwitchChatDownloader
 {
     public static class TwitchComment
     {
-        public static async Task GetCommentsAsync(long videoID, string outputPath, ConsoleProgressBar progressBar,
-            BlockingCollection<Tuple<StreamWriter, TwitchComment.JsonComments>> commentsPipe)
+        // NOTE: An excellent example of the manifestation of ingenious engineering.
+        //  Cause of this fuckin mess I need to declare a fuckin lot of stuff public, although it doesn't affect anything anyway.
+        public static async Task GetCommentsAsync(
+            string userName, TwitchVideo.UserVideos.VideoInfo videoInfo,
+            string outputPath, ConsoleProgressBar progressBar,
+            BlockingCollection<Tuple<StreamWriter, TwitchComment.JsonComments>> commentsPipe,
+            CancellationToken cancellationToken)
         {
             string? nextCursor = null;
+            string videoID = videoInfo.VideoID;
             string video = $"{videoID}/comments?cursor=";
 
             StreamWriter sw = new(outputPath);
 
             do {
-                try {
-                    string query = video + nextCursor;
+                string query = video + nextCursor;
 
+                try {
+                    // NOTE: Stopwatch used to determine http response time
                     //Stopwatch stw = new();
                     //stw.Start();
 
@@ -35,12 +43,15 @@ namespace TwitchChatDownloader
                     int offset = Convert.ToInt32(jsonComments.Comments[^1].ContentOffsetSeconds);
                     progressBar.Report(videoID, offset);
                 }
-                catch (TaskCanceledException e) {
+                catch (TaskCanceledException) {
                     progressBar.ReportDisconnect();
                 }
-            } while (nextCursor is not null);
+            } while (nextCursor is not null && cancellationToken.IsCancellationRequested == false);
 
-            progressBar.Report(videoID, -1);
+            if (cancellationToken.IsCancellationRequested == false) {
+                progressBar.Report(videoID, -1);
+                LogsDB.Add(userName, videoInfo);
+            }
         }
 
 

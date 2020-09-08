@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -7,18 +8,20 @@ using System.Threading.Tasks;
 
 namespace TwitchChatDownloader
 {
-    static class TwitchVideo
+    public static class TwitchVideo
     {
-        public static async Task<List<VideoInfo>> GetVideosByUserIDs(string[] userIDs, int? firstVideos)
+        public static async Task<List<UserVideos>> GetVideosByUserIDsAsync(List<TwitchUser.UserInfo> users, int? firstVideos)
         {
-            List<VideoInfo> videos = new(userIDs.Length);
+            List<UserVideos> usersVideos = new(users.Count);
             int amountOfVideosForUser = firstVideos ?? 20;
 
-            foreach (var userID in userIDs) {
+            foreach (var user in users) {
+
+                List<UserVideos.VideoInfo> videos = new();
 
                 int videosLeft = amountOfVideosForUser;
                 int first = Math.Min(videosLeft, 100);
-                string userQ = $"user_id={userID}";
+                string userQ = $"user_id={user.UserID}";
                 string afterQ = string.Empty;
                 string? cursor;
 
@@ -27,6 +30,7 @@ namespace TwitchChatDownloader
                     string query = $"{userQ}{firstQ}{afterQ}";
 
                     var jsonVideos = await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, query);
+
                     GetVideos(videos, jsonVideos.Videos);
 
                     videosLeft -= jsonVideos.Videos.Length;
@@ -34,75 +38,100 @@ namespace TwitchChatDownloader
                     cursor = jsonVideos.Pagination.Cursor;
                     afterQ = $"&after={cursor}";
                 } while (cursor != null && first > 0);
+
+                videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
+                usersVideos.Add(new UserVideos(user.DisplayName, videos));
             }
 
-            videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
-            return videos;
+            //usersVideos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
+            return usersVideos;
         }
 
 
         // TODO: I need to fix thi method the same way I fixed GetVideosByUserIDs(), but I'm lazy.
         //  Right now it can get only ~50-60 videos
-        public static async Task<List<VideoInfo>> GetVideosByVideoIDs(string videoIDs)
+        public static async Task<List<UserVideos>> GetVideosByVideoIDsAsync(string videoIDs)
         {
-            // NOTE: I can use videoIDs.Count(c => c == ',') to get list capacity, but is it worth it?
-            List<VideoInfo> videos = new();
             string query = $"id={videoIDs}";
+            var jsonVideos = await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, query);
+            var grouppedVideos = jsonVideos.Videos.GroupBy(video => video.UserName);
 
-            var jsonVideos = (await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, query))!.Videos;
+            List<UserVideos> usersVideos = new();
 
-            GetVideos(videos, jsonVideos);
+            foreach (var userVideos in grouppedVideos) {
+                List<UserVideos.VideoInfo> videos = new();
 
-            videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
-            return videos;
+                GetVideos(videos, userVideos);
+
+                videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
+                usersVideos.Add(new UserVideos(userVideos.Key, videos));
+            }
+
+            //videos.Sort((b, a) => a.DurationSeconds.CompareTo(b.DurationSeconds));
+            return usersVideos;
         }
 
 
-        private static void GetVideos(List<VideoInfo> videos, JsonVideosResponse.JsonVideo[] jsonVideos)
+        private static void GetVideos(List<UserVideos.VideoInfo> videos, IEnumerable<JsonVideosResponse.JsonVideo> jsonVideos)
         {
             // NOTE: LINQ?
             foreach (var jsonVideo in jsonVideos) {
-                videos.Add(new VideoInfo(jsonVideo.UserName, jsonVideo.Duration, jsonVideo.VideoID));
+                if (LogsDB.Contains(jsonVideo.UserName, jsonVideo.VideoID) == false) {
+                    videos.Add(new UserVideos.VideoInfo(jsonVideo.VideoID, jsonVideo.Duration, jsonVideo.CreatedAt));
+                }
             }
         }
 
 
-        public class VideoInfo
+        public class UserVideos
         {
-            public readonly string StreamerName;
-            public readonly string Duration;
-            public readonly int DurationSeconds;
-            public readonly long VideoID;
+            public readonly string UserDisplayName;
+            public readonly List<VideoInfo> Videos;
 
-            public VideoInfo(string streamerName, string duration, string videoID)
+            public UserVideos(string userDisplayName, List<VideoInfo> videos)
             {
-                StreamerName = streamerName;
-                Duration = duration;
-                DurationSeconds = StringDurationToSeconds(duration);
-                VideoID = long.Parse(videoID);
+                UserDisplayName = userDisplayName;
+                Videos = videos;
             }
 
-            private static readonly Regex s_durationRegex = new(@"((?<h>\d+)h)?((?<m>\d+)m)?((?<s>\d+)s)", RegexOptions.Compiled);
-            private static int StringDurationToSeconds(string duration)
+            public class VideoInfo
             {
-                var matches = s_durationRegex.Match(duration);
-                int.TryParse(matches.Groups["h"].Value, out int h);
-                int.TryParse(matches.Groups["m"].Value, out int m);
-                int.TryParse(matches.Groups["s"].Value, out int s);
+                public readonly string VideoID;
+                public readonly string Duration;
+                public readonly int DurationSeconds;
+                public readonly DateTime CreatedAt;
 
-                return (h * 60 + m) * 60 + s;
+                public VideoInfo(string videoID, string duration, DateTime createdAt)
+                {
+                    VideoID = videoID;
+                    Duration = duration;
+                    CreatedAt = createdAt;
+                    DurationSeconds = StringDurationToSeconds(duration);
+                }
+
+                private static readonly Regex s_durationRegex = new(@"((?<h>\d+)h)?((?<m>\d+)m)?((?<s>\d+)s)", RegexOptions.Compiled);
+                private static int StringDurationToSeconds(string duration)
+                {
+                    var matches = s_durationRegex.Match(duration);
+                    int.TryParse(matches.Groups["h"].Value, out int h);
+                    int.TryParse(matches.Groups["m"].Value, out int m);
+                    int.TryParse(matches.Groups["s"].Value, out int s);
+
+                    return (h * 60 + m) * 60 + s;
+                }
             }
         }
 
-        // NOTE: Add to this Json classes 'data' keyword with C# 9 ?
+        // NOTE: Add to all Json classes 'data' keyword with C# 9 ?
         private class JsonVideosResponse
         {
             [JsonPropertyName("data")]
             public JsonVideo[] Videos { get; set; }
             [JsonPropertyName("pagination")]
-            public JsonVideosPagination Pagination { get; set; }
+            public JsonPagination Pagination { get; set; }
 
-            public class JsonVideosPagination
+
+            public class JsonPagination
             {
                 [JsonPropertyName("cursor")]
                 public string? Cursor { get; set; }
@@ -111,7 +140,7 @@ namespace TwitchChatDownloader
             public class JsonVideo
             {
                 [JsonPropertyName("id")]
-                public string VideoID { get; set; }   // long
+                public string VideoID { get; set; }   // Apply JsonConverter to make it 'long' type ?
                 [JsonPropertyName("user_id")]
                 public string UserID { get; set; }   // long
                 [JsonPropertyName("user_name")]

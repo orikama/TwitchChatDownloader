@@ -31,12 +31,13 @@ namespace TwitchChatDownloader
 
             public DownloadProgress(string fileName, string duration, int durationSeconds)
             {
+                // NOTE: I can just use FileName + DisplayDuration string
                 FileName = fileName.PadRight(kFileNamePadding);
                 DisplayDuration = duration.PadRight(kDisplayDurationPadding);
                 DurationSeconds = durationSeconds;
             }
         }
-        private readonly Dictionary<long, DownloadProgress> _downloads;
+        private readonly Dictionary<string, DownloadProgress> _downloads;
         private int _currentDownloads = 0;
 
         private bool _isDisconnected = false;
@@ -55,12 +56,12 @@ namespace TwitchChatDownloader
             }
         }
 
-        public void Add(long videoID, string fileName, string duration, int durationSeconds)
+        public void Add(string fileName, string videoID, string duration, int durationSeconds)
         {
             _downloads.Add(videoID, new DownloadProgress(fileName, duration, durationSeconds));
         }
 
-        public void Report(long videoID, int value)
+        public void Report(string videoID, int value)
         {
             value = Math.Min(value, _downloads[videoID].DurationSeconds);
             Interlocked.Exchange(ref _downloads[videoID].CurrentOffset, value);
@@ -98,6 +99,7 @@ namespace TwitchChatDownloader
             // Clear status bar
             Console.SetCursorPosition(0, Console.WindowTop + Console.WindowHeight - 1);
             Console.Write(new string(' ', Console.BufferWidth));
+
             Console.SetCursorPosition(0, currentLineCursor);
         }
 
@@ -117,7 +119,7 @@ namespace TwitchChatDownloader
                 if (video.CurrentOffset != 0) {
                     Console.Write(video.FileName);
                     if (video.CurrentOffset == video.DurationSeconds) {
-                        Console.WriteLine(" Downloading comments that were posted after the VOD finished");
+                        Console.WriteLine("Getting comments that were posted after the VOD finished");
                     } else {
                         double percent = (double)video.CurrentOffset / video.DurationSeconds;
                         int progressBlockCount = (int)(percent * kBlockCount);
@@ -146,7 +148,7 @@ namespace TwitchChatDownloader
 
         private void ResetTimer()
         {
-            _timer.Change(_animationInterval, TimeSpan.FromMilliseconds(-1));
+            _timer.Change(Timeout.Infinite, Timeout.Infinite);
         }
 
         public void Dispose()
