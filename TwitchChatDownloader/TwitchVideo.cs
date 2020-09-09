@@ -52,8 +52,14 @@ namespace TwitchChatDownloader
         //  Right now it can get only ~50-60 videos
         public static async Task<List<UserVideos>> GetVideosByVideoIDsAsync(string videoIDs)
         {
+            int countVideoIDs = videoIDs.Count(c => c == ',');
             string query = $"id={videoIDs}";
+
             var jsonVideos = await TwitchClient.GetJsonAsync<JsonVideosResponse>(TwitchClient.RequestType.Video, query);
+            if(countVideoIDs != jsonVideos.Videos.Length) {
+                Console.WriteLine($"WARNING! {countVideoIDs - jsonVideos.Videos.Length} of the specified VideoID were not found");
+            }
+
             var grouppedVideos = jsonVideos.Videos.GroupBy(video => video.UserName);
 
             List<UserVideos> usersVideos = new();

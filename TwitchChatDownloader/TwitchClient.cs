@@ -47,7 +47,7 @@ namespace TwitchChatDownloader
             return response;
         }
 
-        public static async Task<T?> GetJsonAsync<T>(RequestType type, string query = "") where T : class
+        public static async Task<T> GetJsonAsync<T>(RequestType type, string query = "") where T : class
         {
             HttpResponseMessage response;
 
@@ -73,9 +73,7 @@ namespace TwitchChatDownloader
                 }
             }
 
-            if (response.IsSuccessStatusCode == false) {
-                return null;
-            }
+            _ = response.EnsureSuccessStatusCode();
 
             return await response.Content.ReadFromJsonAsync<T>();
         }

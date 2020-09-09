@@ -15,6 +15,9 @@ namespace TwitchChatDownloader
             var query = $"login={logins}";
 
             var jsonUsers = (await TwitchClient.GetJsonAsync<JsonUsersResponse>(TwitchClient.RequestType.User, query)).Users;
+            if(userNames.Length != jsonUsers.Length) {
+                Console.WriteLine($"WARNING! {userNames.Length - jsonUsers.Length} of the specified Channel names were not found");
+            }
 
             List<UserInfo> users = new(userNames.Length);
             users.AddRange(jsonUsers.Select(jsonUser => new UserInfo(jsonUser.UserID, jsonUser.DisplayName)));

@@ -3,6 +3,7 @@ using System.CommandLine;
 using System.CommandLine.Invocation;
 using System.CommandLine.Parsing;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Threading.Tasks;
 
 
@@ -94,10 +95,15 @@ namespace TwitchChatDownloader
                 sw.Stop();
                 Console.WriteLine($"\nTime: {sw.Elapsed}");
             }
+            catch (HttpRequestException e) {
+                if(e.StatusCode == System.Net.HttpStatusCode.NotFound) {
+                    Console.WriteLine("\nMost likely specified VideoID were not found.");
+                }
+                Console.WriteLine($"\n\tERROR!!!\n{e.Message}\n{e.StackTrace}");
+            }
             catch (Exception e) {
                 Console.WriteLine($"\n\tERROR!!!\n{e.Message}\n{e.StackTrace}");
             }
-
             //Console.CursorVisible = true;
         }
 
