@@ -3,6 +3,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 
 
 namespace TwitchChatDownloader
@@ -13,12 +14,20 @@ namespace TwitchChatDownloader
         public static string ClientSecret => _jsonAppSettings.ClientSecret;
         public static string OAuthToken => _jsonAppSettings.OAuthToken;
         public static int MaxConcurrentDownloads => _jsonAppSettings.MaxConcurrentDownloads;
-        public static string OutputPath => _jsonAppSettings.OutputPath;
+
+        public static string PathToOutputFolder => _jsonAppSettings.OutputPath;
+        public static string PathToOriginalLogs => _originalLogsPath;
+        public static string PathToFilteredLogs => _filteredLogsPath;
+
         public static string CommentFormat => _jsonAppSettings.CommentFormat;
+        public static string FilterExpression => _jsonAppSettings.FilterExpression;
+        public static HashSet<string> IgnoreUsers => _jsonAppSettings.IgnoreUsers;
 
 
         private static JsonAppSettings _jsonAppSettings;
         private static string _settingsPath;
+        private static string _originalLogsPath;
+        private static string _filteredLogsPath;
 
 
         public static async Task LoadAsync(string settingsPath)
@@ -27,27 +36,15 @@ namespace TwitchChatDownloader
 
             _settingsPath = settingsPath;
 
-            var jsonString = File.ReadAllText(settingsPath);
-            _jsonAppSettings = JsonSerializer.Deserialize<JsonAppSettings>(jsonString);
+            var jsonFile = File.ReadAllText(settingsPath);
+            _jsonAppSettings = JsonSerializer.Deserialize<JsonAppSettings>(jsonFile);
 
-            // Validate ClientID and ClientSecret
-            if (_jsonAppSettings.ClientID.Length == 0 || _jsonAppSettings.ClientSecret.Length == 0) {
-                throw new ArgumentException($"You must specify ClientID and ClientSecret in your: {settingsPath}");
-            }
-            // Validate or get new OAuthToken
-            if (_jsonAppSettings.OAuthToken.Length == 0 || await ValidateTokenAsync() == false) {
-                _jsonAppSettings.OAuthToken = await GetNewOAuthTokenAsync();
-                await SaveAsync();
-            }
-            // Validate MaxConcurrentDownloads
-            if (_jsonAppSettings.MaxConcurrentDownloads <= 0) {
-                _jsonAppSettings.MaxConcurrentDownloads = 1;
-                Console.WriteLine("WARNING! MaxConcurrentDownloads was <= 0, using MaxConcurrentDownloads=1");
-            }
-            // Validate CommentFormat
-            if (_jsonAppSettings.CommentFormat.Length == 0) {
-                throw new ArgumentException($"You must specify CommentFormat in your: {settingsPath}");
-            }
+            await ValidateSettings();
+
+            _originalLogsPath = Path.Combine(_jsonAppSettings.OutputPath, "original");
+            _filteredLogsPath = Path.Combine(_jsonAppSettings.OutputPath, "filtered");
+            _ = Directory.CreateDirectory(_originalLogsPath);
+            _ = Directory.CreateDirectory(_filteredLogsPath);
 
             Console.WriteLine(" Done.");
         }
@@ -59,6 +56,32 @@ namespace TwitchChatDownloader
             await JsonSerializer.SerializeAsync(fs, _jsonAppSettings, new JsonSerializerOptions { WriteIndented = true });
         }
 
+
+        private static async Task ValidateSettings()
+        {
+            // Validate ClientID and ClientSecret
+            if (_jsonAppSettings.ClientID.Length == 0 || _jsonAppSettings.ClientSecret.Length == 0) {
+                throw new ArgumentException($"You must specify 'ClientID' and 'ClientSecret' in your: {_settingsPath}");
+            }
+            // Validate or get new OAuthToken
+            if (_jsonAppSettings.OAuthToken.Length == 0 || await ValidateTokenAsync() == false) {
+                _jsonAppSettings.OAuthToken = await GetNewOAuthTokenAsync();
+                await SaveAsync();
+            }
+            // Validate MaxConcurrentDownloads
+            if (_jsonAppSettings.MaxConcurrentDownloads <= 0) {
+                _jsonAppSettings.MaxConcurrentDownloads = 1;
+                Console.WriteLine("WARNING! MaxConcurrentDownloads was <= 0, using MaxConcurrentDownloads=1");
+            }
+            // Validate OutputPath
+            if (_jsonAppSettings.OutputPath.Length == 0) {
+                throw new ArgumentException($"You must specify 'OutputPath' in your: {_settingsPath}");
+            }
+            // Validate CommentFormat
+            if (_jsonAppSettings.CommentFormat.Length == 0) {
+                throw new ArgumentException($"You must specify 'CommentFormat' in your: {_settingsPath}");
+            }
+        }
 
         private static async Task<bool> ValidateTokenAsync()
         {
@@ -83,6 +106,8 @@ namespace TwitchChatDownloader
             public int MaxConcurrentDownloads { get; set; }
             public string OutputPath { get; set; }
             public string CommentFormat { get; set; }
+            public string FilterExpression { get; set; }
+            public HashSet<string> IgnoreUsers { get; set; }
         }
 
         // https://dev.twitch.tv/docs/authentication/getting-tokens-oauth#oauth-client-credentials-flow
